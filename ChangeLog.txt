@@ -1,3 +1,18 @@
+1.4.12 - 201703xx
+=================
+
+Broker:
+- Fix mosquitto.db from becoming corrupted due to client messages being
+  persisted with no stored message. Closes #424.
+- Fix bridge not restarting properly. Closes #428.
+- Fix unitialized memory in gets_quiet on Windows. Closes #426.
+- Fix building with WITH_ADNS=no for systems that don't use glibc. Closes
+  #415.
+- Fixes to readme.md.
+- Fix deprecation warning for OpenSSL 1.1. PR #416.
+- Don't segfault on duplicate bridge names. Closes #446.
+
+
 1.4.11 - 20170220
 =================
 
