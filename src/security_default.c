@@ -39,10 +39,11 @@ static int mosquitto__memcmp_const(const void *ptr1, const void *b, size_t len);
 int mosquitto_security_init_default(struct mosquitto_db *db, bool reload)
 {
 	int rc;
+	int i;
 
 	/* Load username/password data if required. */
 	if(db->config->per_listener_settings){
-		for(int i=0; i<db->config->listener_count; i++){
+		for(i=0; i<db->config->listener_count; i++){
 			char *pwf = db->config->listeners[i].security_options.password_file;
 			if(pwf){
 				rc = unpwd__file_parse(&db->config->listeners[i].unpwd, pwf);
@@ -76,7 +77,7 @@ int mosquitto_security_init_default(struct mosquitto_db *db, bool reload)
 
 	/* Load psk data if required. */
 	if(db->config->per_listener_settings){
-		for(int i=0; i<db->config->listener_count; i++){
+		for(i=0; i<db->config->listener_count; i++){
 			char *pskf = db->config->listeners[i].security_options.psk_file;
 			if(pskf){
 				rc = psk__file_parse(db, &db->config->listeners[i].psk_id, pskf);
@@ -103,13 +104,14 @@ int mosquitto_security_init_default(struct mosquitto_db *db, bool reload)
 int mosquitto_security_cleanup_default(struct mosquitto_db *db, bool reload)
 {
 	int rc;
+	int i;
 	rc = acl__cleanup(db, reload);
 	if(rc != MOSQ_ERR_SUCCESS) return rc;
 
 	rc = unpwd__cleanup(&db->unpwd, reload);
 	if(rc != MOSQ_ERR_SUCCESS) return rc;
 
-	for(int i=0; i<db->config->listener_count; i++){
+	for(i=0; i<db->config->listener_count; i++){
 		if(db->config->listeners[i].unpwd){
 			rc = unpwd__cleanup(&db->config->listeners[i].unpwd, reload);
 			if(rc != MOSQ_ERR_SUCCESS) return rc;
@@ -119,7 +121,7 @@ int mosquitto_security_cleanup_default(struct mosquitto_db *db, bool reload)
 	rc = unpwd__cleanup(&db->psk_id, reload);
 	if(rc != MOSQ_ERR_SUCCESS) return rc;
 
-	for(int i=0; i<db->config->listener_count; i++){
+	for(i=0; i<db->config->listener_count; i++){
 		if(db->config->listeners[i].psk_id){
 			rc = unpwd__cleanup(&db->config->listeners[i].psk_id, reload);
 			if(rc != MOSQ_ERR_SUCCESS) return rc;
