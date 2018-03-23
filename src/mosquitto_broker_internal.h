@@ -138,6 +138,29 @@ typedef union {
 
 typedef uint64_t dbid_t;
 
+struct mosquitto__auth_plugin_config
+{
+	char *path;
+	struct mosquitto_opt *options;
+	int option_count;
+	bool deny_special_chars;
+};
+
+struct mosquitto__security_options {
+	/* Any options that get added here also need considering
+	 * in config__read() with regards whether allow_anonymous
+	 * should be disabled when these options are set.
+	 */
+	char *password_file;
+	char *psk_file;
+	struct mosquitto__auth_plugin_config *auth_plugins;
+	int auth_plugin_count;
+	char allow_anonymous;
+	bool allow_zero_length_clientid;
+	char *auto_id_prefix;
+	int auto_id_prefix_len;
+};
+
 struct mosquitto__listener {
 	int fd;
 	uint16_t port;
@@ -168,20 +191,14 @@ struct mosquitto__listener {
 	char *http_dir;
 	struct libwebsocket_protocols *ws_protocol;
 #endif
-};
-
-struct mosquitto__auth_plugin_config
-{
-	char *path;
-	struct mosquitto_opt *options;
-	int option_count;
-	bool deny_special_chars;
+	struct mosquitto__security_options security_options;
+	struct mosquitto__unpwd *unpwd;
+	struct mosquitto__unpwd *psk_id;
 };
 
 struct mosquitto__config {
 	char *config_file;
 	char *acl_file;
-	bool allow_anonymous;
 	bool allow_duplicate_messages;
 	bool allow_zero_length_clientid;
 	bool allow_sys_update;
@@ -202,15 +219,14 @@ struct mosquitto__config {
 	char *log_file;
 	FILE *log_fptr;
 	uint32_t message_size_limit;
-	char *password_file;
 	bool persistence;
 	char *persistence_location;
 	char *persistence_file;
 	char *persistence_filepath;
 	time_t persistent_client_expiration;
 	char *pid_file;
-	char *psk_file;
 	bool queue_qos0_messages;
+	bool per_listener_settings;
 	bool set_tcp_nodelay;
 	int sys_interval;
 	bool upgrade_outgoing_qos;
@@ -226,6 +242,7 @@ struct mosquitto__config {
 #endif
 	struct mosquitto__auth_plugin_config *auth_plugins;
 	int auth_plugin_count;
+	struct mosquitto__security_options security_options;
 };
 
 struct mosquitto__subleaf {
@@ -606,8 +623,8 @@ int mosquitto_security_init_default(struct mosquitto_db *db, bool reload);
 int mosquitto_security_apply_default(struct mosquitto_db *db);
 int mosquitto_security_cleanup_default(struct mosquitto_db *db, bool reload);
 int mosquitto_acl_check_default(struct mosquitto_db *db, struct mosquitto *context, const char *topic, int access);
-int mosquitto_unpwd_check_default(struct mosquitto_db *db, const char *username, const char *password);
-int mosquitto_psk_key_get_default(struct mosquitto_db *db, const char *hint, const char *identity, char *key, int max_key_len);
+int mosquitto_unpwd_check_default(struct mosquitto_db *db, struct mosquitto *context, const char *username, const char *password);
+int mosquitto_psk_key_get_default(struct mosquitto_db *db, struct mosquitto *context, const char *hint, const char *identity, char *key, int max_key_len);
 
 /* ============================================================
  * Window service and signal related functions

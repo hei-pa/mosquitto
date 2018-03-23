@@ -2,6 +2,8 @@
 ==============
 
 Broker:
+- Add per_listener_settings to allow authentication and access control to be
+  per listener.
 - Fix UNSUBSCRIBE with no topic is accepted on MQTT 3.1.1. Closes #665.
 - Add ability to deny access to SUBSCRIBE messages as well as the current
   read/write accesses. Currently for auth plugins only.
@@ -62,6 +64,12 @@ Broker:
   Closes #8.
 - Add set_tcp_nodelay option to allow Nagle's algorithm to be disabled on
   client sockets. Closes #433.
+- The behaviour of allow_anonymous has changed. In the old behaviour, the
+  default if not set was to allow anonymous access. The new behaviour is to
+  default is to allow anonymous access unless another security option is set.
+  For example, if password_file is set and allow_anonymous is not set, then
+  anonymous access will be denied. It is still possible to allow anonymous
+  access by setting it explicitly.
 - Maximum connections on Windows increased to 2048.
 
 Client library:
@@ -101,6 +109,8 @@ Clients:
 - Connections now default to using MQTT v3.1.1.
 - Default to using port 8883 when using TLS.
 - Correctly handle empty files with "mosquitto_pub -l". Closes #676.
+- mosquitto_sub doesn't continue to keep connecting if CONNACK tells it the
+  connection was refused.
 
 Build:
 - Add WITH_STRIP option (defaulting to "no") that when set to "yes" will strip

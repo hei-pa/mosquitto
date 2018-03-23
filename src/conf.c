@@ -96,6 +96,15 @@ static char *fgets_extending(char **buf, int *buflen, FILE *stream)
 }
 
 
+static void conf__set_cur_security_options(struct mosquitto__config *config, struct mosquitto__listener *cur_listener, struct mosquitto__security_options **security_options)
+{
+	if(config->per_listener_settings){
+		(*security_options) = &cur_listener->security_options;
+	}else{
+		(*security_options) = &config->security_options;
+	}
+}
+
 static int conf__attempt_resolve(const char *host, const char *text, int log, const char *msg)
 {
 	struct addrinfo gai_hints;
@@ -141,17 +150,18 @@ static void config__init_reload(struct mosquitto__config *config)
 	/* Set defaults */
 	mosquitto__free(config->acl_file);
 	config->acl_file = NULL;
-	config->allow_anonymous = true;
+	config->security_options.allow_anonymous = -1;
 	config->allow_duplicate_messages = false;
-	config->allow_zero_length_clientid = true;
+	config->security_options.allow_zero_length_clientid = true;
+	config->security_options.auto_id_prefix = NULL;
+	config->security_options.auto_id_prefix_len = 0;
 	config->allow_sys_update = false;
-	config->auto_id_prefix = NULL;
-	config->auto_id_prefix_len = 0;
 	config->autosave_interval = 1800;
 	config->autosave_on_changes = false;
 	mosquitto__free(config->clientid_prefixes);
 	config->connection_messages = true;
 	config->clientid_prefixes = NULL;
+	config->per_listener_settings = false;
 	if(config->log_fptr){
 		fclose(config->log_fptr);
 		config->log_fptr = NULL;
@@ -178,16 +188,16 @@ static void config__init_reload(struct mosquitto__config *config)
 	}
 #endif
 	config->log_timestamp = true;
-	mosquitto__free(config->password_file);
-	config->password_file = NULL;
+	mosquitto__free(config->security_options.password_file);
+	config->security_options.password_file = NULL;
 	config->persistence = false;
 	mosquitto__free(config->persistence_location);
 	config->persistence_location = NULL;
 	mosquitto__free(config->persistence_file);
 	config->persistence_file = NULL;
 	config->persistent_client_expiration = 0;
-	mosquitto__free(config->psk_file);
-	config->psk_file = NULL;
+	mosquitto__free(config->security_options.psk_file);
+	config->security_options.psk_file = NULL;
 	config->queue_qos0_messages = false;
 	config->set_tcp_nodelay = false;
 	config->sys_interval = 10;
@@ -219,39 +229,10 @@ void config__init(struct mosquitto__config *config)
 	config__init_reload(config);
 	config->config_file = NULL;
 	config->daemon = false;
-	config->default_listener.host = NULL;
-	config->default_listener.port = 0;
+	memset(&config->default_listener, 0, sizeof(struct mosquitto__listener));
 	config->default_listener.max_connections = -1;
-	config->default_listener.mount_point = NULL;
-	config->default_listener.socks = NULL;
-	config->default_listener.sock_count = 0;
-	config->default_listener.client_count = 0;
 	config->default_listener.protocol = mp_mqtt;
-	config->default_listener.use_username_as_clientid = false;
-#ifdef WITH_TLS
-	config->default_listener.tls_version = NULL;
-	config->default_listener.cafile = NULL;
-	config->default_listener.capath = NULL;
-	config->default_listener.certfile = NULL;
-	config->default_listener.keyfile = NULL;
-	config->default_listener.ciphers = NULL;
-	config->default_listener.psk_hint = NULL;
-	config->default_listener.require_certificate = false;
-	config->default_listener.crlfile = NULL;
-	config->default_listener.use_identity_as_username = false;
-	config->default_listener.use_subject_as_username = false;
-#endif
-	config->listeners = NULL;
-	config->listener_count = 0;
-	config->pid_file = NULL;
-	config->user = NULL;
-#ifdef WITH_BRIDGE
-	config->bridges = NULL;
-	config->bridge_count = 0;
-#endif
-	config->auth_plugins = NULL;
-	config->verbose = false;
-	config->message_size_limit = 0;
+	config->default_listener.security_options.allow_anonymous = -1;
 }
 
 void config__cleanup(struct mosquitto__config *config)
@@ -261,14 +242,14 @@ void config__cleanup(struct mosquitto__config *config)
 	struct mosquitto__auth_plugin_config *plug;
 
 	mosquitto__free(config->acl_file);
-	mosquitto__free(config->auto_id_prefix);
+	mosquitto__free(config->security_options.auto_id_prefix);
 	mosquitto__free(config->clientid_prefixes);
 	mosquitto__free(config->config_file);
-	mosquitto__free(config->password_file);
+	mosquitto__free(config->security_options.password_file);
 	mosquitto__free(config->persistence_location);
 	mosquitto__free(config->persistence_file);
 	mosquitto__free(config->persistence_filepath);
-	mosquitto__free(config->psk_file);
+	mosquitto__free(config->security_options.psk_file);
 	mosquitto__free(config->pid_file);
 	if(config->listeners){
 		for(i=0; i<config->listener_count; i++){
@@ -452,7 +433,12 @@ int config__parse_args(struct mosquitto__config *config, int argc, char *argv[])
 			|| config->default_listener.port
 			|| config->default_listener.max_connections != -1
 			|| config->default_listener.mount_point
-			|| config->default_listener.protocol != mp_mqtt){
+			|| config->default_listener.protocol != mp_mqtt
+			|| config->default_listener.security_options.password_file
+			|| config->default_listener.security_options.psk_file
+			|| config->default_listener.security_options.auth_plugin_count
+			|| config->default_listener.security_options.allow_anonymous != -1
+			){
 
 		config->listener_count++;
 		config->listeners = mosquitto__realloc(config->listeners, sizeof(struct mosquitto__listener)*config->listener_count);
@@ -497,6 +483,11 @@ int config__parse_args(struct mosquitto__config *config, int argc, char *argv[])
 		config->listeners[config->listener_count-1].use_identity_as_username = config->default_listener.use_identity_as_username;
 		config->listeners[config->listener_count-1].use_subject_as_username = config->default_listener.use_subject_as_username;
 #endif
+		config->listeners[config->listener_count-1].security_options.password_file = config->default_listener.security_options.password_file;
+		config->listeners[config->listener_count-1].security_options.psk_file = config->default_listener.security_options.psk_file;
+		config->listeners[config->listener_count-1].security_options.auth_plugins = config->default_listener.security_options.auth_plugins;
+		config->listeners[config->listener_count-1].security_options.auth_plugin_count = config->default_listener.security_options.auth_plugin_count;
+		config->listeners[config->listener_count-1].security_options.allow_anonymous = config->default_listener.security_options.allow_anonymous;
 	}
 
 	/* Default to drop to mosquitto user if we are privileged and no user specified. */
@@ -515,9 +506,7 @@ int config__read(struct mosquitto__config *config, bool reload)
 	struct config_recurse cr;
 	int lineno = 0;
 	int len;
-#ifdef WITH_BRIDGE
 	int i;
-#endif
 
 	cr.log_dest = MQTT3_LOG_NONE;
 	cr.log_dest_set = 0;
@@ -540,6 +529,40 @@ int config__read(struct mosquitto__config *config, bool reload)
 		return rc;
 	}
 
+	/* If auth/access options are set and allow_anonymous not explicitly set, disallow anon. */
+	if(config->per_listener_settings){
+		for(i=0; i<config->listener_count; i++){
+			if(config->listeners[i].security_options.allow_anonymous == -1){
+				if(config->listeners[i].security_options.password_file
+					|| config->listeners[i].security_options.psk_file
+					|| config->listeners[i].security_options.auth_plugins){
+
+					/* allow_anonymous not set explicitly, some other security options
+					* have been set - so disable allow_anonymous
+					*/
+					config->listeners[i].security_options.allow_anonymous = false;
+				}else{
+					/* Default option if no security options set */
+					config->listeners[i].security_options.allow_anonymous = true;
+				}
+			}
+		}
+	}else{
+		if(config->security_options.allow_anonymous == -1){
+			if(config->security_options.password_file
+				 || config->security_options.psk_file
+				 || config->security_options.auth_plugins){
+
+				/* allow_anonymous not set explicitly, some other security options
+				* have been set - so disable allow_anonymous
+				*/
+				config->security_options.allow_anonymous = false;
+			}else{
+				/* Default option if no security options set */
+				config->security_options.allow_anonymous = true;
+			}
+		}
+	}
 #ifdef WITH_PERSISTENCE
 	if(config->persistence){
 		if(!config->persistence_file){
@@ -627,6 +650,7 @@ int config__read_file_core(struct mosquitto__config *config, bool reload, const 
 	int i;
 #endif
 	int lineno_ext;
+	struct mosquitto__security_options *cur_security_options = NULL;
 
 	*lineno = 0;
 
@@ -686,11 +710,13 @@ int config__read_file_core(struct mosquitto__config *config, bool reload, const 
 					log__printf(NULL, MOSQ_LOG_WARNING, "Warning: Bridge support not available.");
 #endif
 				}else if(!strcmp(token, "allow_anonymous")){
-					if(conf__parse_bool(&token, "allow_anonymous", &config->allow_anonymous, saveptr)) return MOSQ_ERR_INVAL;
+					conf__set_cur_security_options(config, cur_listener, &cur_security_options);
+					if(conf__parse_bool(&token, "allow_anonymous", (bool *)&cur_security_options->allow_anonymous, saveptr)) return MOSQ_ERR_INVAL;
 				}else if(!strcmp(token, "allow_duplicate_messages")){
 					if(conf__parse_bool(&token, "allow_duplicate_messages", &config->allow_duplicate_messages, saveptr)) return MOSQ_ERR_INVAL;
 				}else if(!strcmp(token, "allow_zero_length_clientid")){
-					if(conf__parse_bool(&token, "allow_zero_length_clientid", &config->allow_zero_length_clientid, saveptr)) return MOSQ_ERR_INVAL;
+					conf__set_cur_security_options(config, cur_listener, &cur_security_options);
+					if(conf__parse_bool(&token, "allow_zero_length_clientid", &cur_security_options->allow_zero_length_clientid, saveptr)) return MOSQ_ERR_INVAL;
 				}else if(!strcmp(token, "allow_sys_update")){
 					if(conf__parse_bool(&token, "allow_sys_update", &config->allow_sys_update, saveptr)) return MOSQ_ERR_INVAL;
 				}else if(!strncmp(token, "auth_opt_", 9)){
@@ -754,11 +780,12 @@ int config__read_file_core(struct mosquitto__config *config, bool reload, const 
 					}
 					if(conf__parse_bool(&token, "auth_plugin_deny_special_chars", &cur_auth_plugin->deny_special_chars, saveptr)) return MOSQ_ERR_INVAL;
 				}else if(!strcmp(token, "auto_id_prefix")){
-					if(conf__parse_string(&token, "auto_id_prefix", &config->auto_id_prefix, saveptr)) return MOSQ_ERR_INVAL;
-					if(config->auto_id_prefix){
-						config->auto_id_prefix_len = strlen(config->auto_id_prefix);
+					conf__set_cur_security_options(config, cur_listener, &cur_security_options);
+					if(conf__parse_string(&token, "auto_id_prefix", &cur_security_options->auto_id_prefix, saveptr)) return MOSQ_ERR_INVAL;
+					if(cur_security_options->auto_id_prefix){
+						cur_security_options->auto_id_prefix_len = strlen(cur_security_options->auto_id_prefix);
 					}else{
-						config->auto_id_prefix_len = 0;
+						cur_security_options->auto_id_prefix_len = 0;
 					}
 				}else if(!strcmp(token, "autosave_interval")){
 					if(conf__parse_int(&token, "autosave_interval", &config->autosave_interval, saveptr)) return MOSQ_ERR_INVAL;
@@ -1175,6 +1202,7 @@ int config__read_file_core(struct mosquitto__config *config, bool reload, const 
 						}
 						cur_listener = &config->listeners[config->listener_count-1];
 						memset(cur_listener, 0, sizeof(struct mosquitto__listener));
+						cur_listener->security_options.allow_anonymous = -1;
 						cur_listener->protocol = mp_mqtt;
 						cur_listener->port = tmp_int;
 						token = strtok_r(NULL, "", &saveptr);
@@ -1444,11 +1472,18 @@ int config__read_file_core(struct mosquitto__config *config, bool reload, const 
 					log__printf(NULL, MOSQ_LOG_WARNING, "Warning: Bridge support not available.");
 #endif
 				}else if(!strcmp(token, "password_file")){
+					conf__set_cur_security_options(config, cur_listener, &cur_security_options);
 					if(reload){
-						mosquitto__free(config->password_file);
-						config->password_file = NULL;
+						mosquitto__free(cur_security_options->password_file);
+						cur_security_options->password_file = NULL;
 					}
-					if(conf__parse_string(&token, "password_file", &config->password_file, saveptr)) return MOSQ_ERR_INVAL;
+					if(conf__parse_string(&token, "password_file", &cur_security_options->password_file, saveptr)) return MOSQ_ERR_INVAL;
+				}else if(!strcmp(token, "per_listener_settings")){
+					if(conf__parse_bool(&token, "per_listener_settings", &config->per_listener_settings, saveptr)) return MOSQ_ERR_INVAL;
+					if(cur_security_options && config->per_listener_settings){
+						log__printf(NULL, MOSQ_LOG_ERR, "Error: per_listener_settings must be set before any other security settings.");
+						return MOSQ_ERR_INVAL;
+					}
 				}else if(!strcmp(token, "persistence") || !strcmp(token, "retained_persistence")){
 					if(conf__parse_bool(&token, token, &config->persistence, saveptr)) return MOSQ_ERR_INVAL;
 				}else if(!strcmp(token, "persistence_file")){
@@ -1527,11 +1562,12 @@ int config__read_file_core(struct mosquitto__config *config, bool reload, const 
 					}
 				}else if(!strcmp(token, "psk_file")){
 #ifdef REAL_WITH_TLS_PSK
+					conf__set_cur_security_options(config, cur_listener, &cur_security_options);
 					if(reload){
-						mosquitto__free(config->psk_file);
-						config->psk_file = NULL;
+						mosquitto__free(cur_security_options->psk_file);
+						cur_security_options->psk_file = NULL;
 					}
-					if(conf__parse_string(&token, "psk_file", &config->psk_file, saveptr)) return MOSQ_ERR_INVAL;
+					if(conf__parse_string(&token, "psk_file", &cur_security_options->psk_file, saveptr)) return MOSQ_ERR_INVAL;
 #else
 					log__printf(NULL, MOSQ_LOG_WARNING, "Warning: TLS/TLS-PSK support not available.");
 #endif

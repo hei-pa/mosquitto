@@ -416,7 +416,7 @@ int mosquitto_unpwd_check(struct mosquitto_db *db, struct mosquitto *context, co
 	int rc;
 	int i;
 
-	rc = mosquitto_unpwd_check_default(db, username, password);
+	rc = mosquitto_unpwd_check_default(db, context, username, password);
 	if(rc != MOSQ_ERR_PLUGIN_DEFER){
 		return rc;
 	}
@@ -449,7 +449,7 @@ int mosquitto_psk_key_get(struct mosquitto_db *db, struct mosquitto *context, co
 	int rc;
 	int i;
 
-	rc = mosquitto_psk_key_get_default(db, hint, identity, key, max_key_len);
+	rc = mosquitto_psk_key_get_default(db, context, hint, identity, key, max_key_len);
 	if(rc != MOSQ_ERR_PLUGIN_DEFER){
 		return rc;
 	}
