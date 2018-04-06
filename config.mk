@@ -123,7 +123,7 @@ else
 	CFLAGS?=-Wall -ggdb -O2
 endif
 
-LIB_CFLAGS:=${CFLAGS} ${CPPFLAGS} -I. -I.. -I../lib
+LIB_CFLAGS:=${CFLAGS} ${CPPFLAGS} -I. -I.. -I../lib -std=c99
 LIB_CXXFLAGS:=$(LIB_CFLAGS) ${CPPFLAGS}
 LIB_LDFLAGS:=${LDFLAGS}
 
