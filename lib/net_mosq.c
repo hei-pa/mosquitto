@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2009-2016 Roger Light <roger@atchoo.org>
+Copyright (c) 2009-2018 Roger Light <roger@atchoo.org>
 
 All rights reserved. This program and the accompanying materials
 are made available under the terms of the Eclipse Public License v1.0
@@ -190,7 +190,7 @@ int net__socket_close(struct mosquitto *mosq)
 }
 
 
-#ifdef REAL_WITH_TLS_PSK
+#ifdef WITH_TLS_PSK
 static unsigned int psk_client_callback(SSL *ssl, const char *hint,
 		char *identity, unsigned int max_identity_len,
 		unsigned char *psk, unsigned int max_psk_len)
@@ -442,38 +442,28 @@ int net__socket_connect_tls(struct mosquitto *mosq)
 }
 #endif
 
-int net__socket_connect_step3(struct mosquitto *mosq, const char *host, uint16_t port, const char *bind_address, bool blocking)
+
+static int net__init_ssl_ctx(struct mosquitto *mosq)
 {
 #ifdef WITH_TLS
 	int ret;
-	BIO *bio;
+
+	if(mosq->ssl_ctx){
+		if(!mosq->ssl_ctx_defaults){
+			return MOSQ_ERR_SUCCESS;
+		}else if(!mosq->tls_cafile && !mosq->tls_capath && !mosq->tls_psk){
+			log__printf(mosq, MOSQ_LOG_ERR, "Error: MOSQ_OPT_SSL_CTX_WITH_DEFAULTS used without specifying cafile, capath or psk.");
+			return MOSQ_ERR_INVAL;
+		}
+	}
+
+	if(mosq->tls_cafile || mosq->tls_capath || mosq->tls_psk){
+#if OPENSSL_VERSION_NUMBER < 0x10100000L
+		mosq->ssl_ctx = SSL_CTX_new(SSLv23_client_method());
+#else
+		mosq->ssl_ctx = SSL_CTX_new(TLS_client_method());
 #endif
 
-#ifdef WITH_TLS
-	if(mosq->tls_cafile || mosq->tls_capath || mosq->tls_psk){
-#if OPENSSL_VERSION_NUMBER >= 0x10001000L
-		if(!mosq->tls_version){
-			mosq->ssl_ctx = SSL_CTX_new(SSLv23_client_method());
-		}else if(!strcmp(mosq->tls_version, "tlsv1.2")){
-			mosq->ssl_ctx = SSL_CTX_new(TLSv1_2_client_method());
-		}else if(!strcmp(mosq->tls_version, "tlsv1.1")){
-			mosq->ssl_ctx = SSL_CTX_new(TLSv1_1_client_method());
-		}else if(!strcmp(mosq->tls_version, "tlsv1")){
-			mosq->ssl_ctx = SSL_CTX_new(TLSv1_client_method());
-		}else{
-			log__printf(mosq, MOSQ_LOG_ERR, "Error: Protocol %s not supported.", mosq->tls_version);
-			COMPAT_CLOSE(mosq->sock);
-			return MOSQ_ERR_INVAL;
-		}
-#else
-		if(!mosq->tls_version || !strcmp(mosq->tls_version, "tlsv1")){
-			mosq->ssl_ctx = SSL_CTX_new(TLSv1_client_method());
-		}else{
-			log__printf(mosq, MOSQ_LOG_ERR, "Error: Protocol %s not supported.", mosq->tls_version);
-			COMPAT_CLOSE(mosq->sock);
-			return MOSQ_ERR_INVAL;
-		}
-#endif
 		if(!mosq->ssl_ctx){
 			log__printf(mosq, MOSQ_LOG_ERR, "Error: Unable to create TLS context.");
 			COMPAT_CLOSE(mosq->sock);
@@ -481,10 +471,23 @@ int net__socket_connect_step3(struct mosquitto *mosq, const char *host, uint16_t
 			return MOSQ_ERR_TLS;
 		}
 
-#if OPENSSL_VERSION_NUMBER >= 0x10000000
+		if(!mosq->tls_version){
+			SSL_CTX_set_options(mosq->ssl_ctx, SSL_OP_NO_SSLv3);
+		}else if(!strcmp(mosq->tls_version, "tlsv1.2")){
+			SSL_CTX_set_options(mosq->ssl_ctx, SSL_OP_NO_SSLv3 | SSL_OP_NO_TLSv1_1 | SSL_OP_NO_TLSv1);
+		}else if(!strcmp(mosq->tls_version, "tlsv1.1")){
+			SSL_CTX_set_options(mosq->ssl_ctx, SSL_OP_NO_SSLv3 | SSL_OP_NO_TLSv1_2 | SSL_OP_NO_TLSv1);
+		}else if(!strcmp(mosq->tls_version, "tlsv1")){
+			SSL_CTX_set_options(mosq->ssl_ctx, SSL_OP_NO_SSLv3 | SSL_OP_NO_TLSv1_2 | SSL_OP_NO_TLSv1_1);
+		}else{
+			log__printf(mosq, MOSQ_LOG_ERR, "Error: Protocol %s not supported.", mosq->tls_version);
+			COMPAT_CLOSE(mosq->sock);
+			return MOSQ_ERR_INVAL;
+		}
+
 		/* Disable compression */
 		SSL_CTX_set_options(mosq->ssl_ctx, SSL_OP_NO_COMPRESSION);
-#endif
+
 #ifdef SSL_MODE_RELEASE_BUFFERS
 			/* Use even less memory per SSL connection. */
 			SSL_CTX_set_mode(mosq->ssl_ctx, SSL_MODE_RELEASE_BUFFERS);
@@ -567,12 +570,27 @@ int net__socket_connect_step3(struct mosquitto *mosq, const char *host, uint16_t
 					return MOSQ_ERR_TLS;
 				}
 			}
-#ifdef REAL_WITH_TLS_PSK
+#ifdef WITH_TLS_PSK
 		}else if(mosq->tls_psk){
 			SSL_CTX_set_psk_client_callback(mosq->ssl_ctx, psk_client_callback);
 #endif
 		}
+	}
 
+#endif
+	return MOSQ_ERR_SUCCESS;
+}
+
+
+int net__socket_connect_step3(struct mosquitto *mosq, const char *host, uint16_t port, const char *bind_address, bool blocking)
+{
+#ifdef WITH_TLS
+	BIO *bio;
+
+	int rc = net__init_ssl_ctx(mosq);
+	if(rc) return rc;
+
+	if(mosq->ssl_ctx){
 		mosq->ssl = SSL_new(mosq->ssl_ctx);
 		if(!mosq->ssl){
 			COMPAT_CLOSE(mosq->sock);

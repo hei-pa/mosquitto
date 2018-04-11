@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2009-2016 Roger Light <roger@atchoo.org>
+Copyright (c) 2009-2018 Roger Light <roger@atchoo.org>
 
 All rights reserved. This program and the accompanying materials
 are made available under the terms of the Eclipse Public License v1.0
@@ -18,7 +18,7 @@ Contributors:
 
 #ifndef WIN32
 /* For initgroups() */
-#  define _BSD_SOURCE
+#  define _DEFAULT_SOURCE
 #  include <unistd.h>
 #  include <grp.h>
 #  include <assert.h>

@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2012-2014 Roger Light <roger@atchoo.org>
+Copyright (c) 2012-2018 Roger Light <roger@atchoo.org>
 
 All rights reserved. This program and the accompanying materials
 are made available under the terms of the Eclipse Public License v1.0
@@ -15,7 +15,7 @@ Contributors:
 */
 
 #define _POSIX_C_SOURCE 200809L
-#define _BSD_SOURCE
+#define _DEFAULT_SOURCE
 
 #include <errno.h>
 #include <openssl/evp.h>

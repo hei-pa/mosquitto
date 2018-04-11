@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2009-2016 Roger Light <roger@atchoo.org>
+Copyright (c) 2009-2018 Roger Light <roger@atchoo.org>
 
 All rights reserved. This program and the accompanying materials
 are made available under the terms of the Eclipse Public License v1.0
@@ -344,7 +344,7 @@ int mosquitto_topic_matches_sub2(const char *sub, size_t sublen, const char *top
 	return MOSQ_ERR_SUCCESS;
 }
 
-#ifdef REAL_WITH_TLS_PSK
+#ifdef WITH_TLS_PSK
 int mosquitto__hex2bin(const char *hex, unsigned char *bin, int bin_max_len)
 {
 	BIGNUM *bn = NULL;

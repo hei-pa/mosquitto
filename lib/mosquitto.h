@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2010-2014 Roger Light <roger@atchoo.org>
+Copyright (c) 2010-2018 Roger Light <roger@atchoo.org>
 
 All rights reserved. This program and the accompanying materials
 are made available under the terms of the Eclipse Public License v1.0
@@ -91,6 +91,8 @@ enum mosq_err_t {
 /* Error values */
 enum mosq_opt_t {
 	MOSQ_OPT_PROTOCOL_VERSION = 1,
+	MOSQ_OPT_SSL_CTX = 2,
+	MOSQ_OPT_SSL_CTX_WITH_DEFAULTS = 3,
 };
 
 /* MQTT specification restricts client ids to a maximum of 23 characters */
@@ -961,10 +963,27 @@ libmosq_EXPORT int mosquitto_threaded_set(struct mosquitto *mosq, bool threaded)
  *	value -  the option specific value.
  *
  * Options:
- *	MOSQ_OPT_PROTOCOL_VERSION - value must be an int, set to either
- *	                            MQTT_PROTOCOL_V31 or MQTT_PROTOCOL_V311. Must
- *	                            be set before the client connects. Defaults to
- *	                            MQTT_PROTOCOL_V31.
+ *	MOSQ_OPT_PROTOCOL_VERSION
+ *	          Value must be an int, set to either MQTT_PROTOCOL_V31 or
+ *	          MQTT_PROTOCOL_V311. Must be set before the client connects.
+ *	          Defaults to MQTT_PROTOCOL_V31.
+ *
+ *	MOSQ_OPT_SSL_CTX
+ *	          Pass an openssl SSL_CTX to be used when creating TLS connections
+ *	          rather than libmosquitto creating its own.  This must be called
+ *	          before connecting to have any effect. If you use this option, the
+ *	          onus is on you to ensure that you are using secure settings.
+ *	          Setting to NULL means that libmosquitto will use its own SSL_CTX
+ *	          if TLS is to be used.
+ *
+ *	MOSQ_OPT_SSL_CTX_WITH_DEFAULTS
+ *	          Value must be an int set to 1 or 0. If set to 1, then the user
+ *	          specified SSL_CTX passed in using MOSQ_OPT_SSL_CTX will have the
+ *	          default options applied to it. This means that you only need to
+ *	          change the values that are relevant to you. If you use this
+ *	          option then you must configure the TLS options as normal, i.e.
+ *	          you should use <mosquitto_tls_set> to configure the cafile/capath
+ *	          as a minimum.
  */
 libmosq_EXPORT int mosquitto_opts_set(struct mosquitto *mosq, enum mosq_opt_t option, void *value);
 
@@ -1133,6 +1152,31 @@ libmosq_EXPORT int mosquitto_tls_psk_set(struct mosquitto *mosq, const char *psk
  * * 4-255 - reserved for future use
  */
 libmosq_EXPORT void mosquitto_connect_callback_set(struct mosquitto *mosq, void (*on_connect)(struct mosquitto *, void *, int));
+
+/*
+ * Function: mosquitto_connect_with_flags_callback_set
+ *
+ * Set the connect callback. This is called when the broker sends a CONNACK
+ * message in response to a connection.
+ *
+ * Parameters:
+ *  mosq -       a valid mosquitto instance.
+ *  on_connect - a callback function in the following form:
+ *               void callback(struct mosquitto *mosq, void *obj, int rc)
+ *
+ * Callback Parameters:
+ *  mosq - the mosquitto instance making the callback.
+ *  obj - the user data provided in <mosquitto_new>
+ *  rc -  the return code of the connection response, one of:
+ *  flags - the connect flags.
+ *
+ * * 0 - success
+ * * 1 - connection refused (unacceptable protocol version)
+ * * 2 - connection refused (identifier rejected)
+ * * 3 - connection refused (broker unavailable)
+ * * 4-255 - reserved for future use
+ */
+libmosq_EXPORT void mosquitto_connect_with_flags_callback_set(struct mosquitto *mosq, void (*on_connect)(struct mosquitto *, void *, int, int));
 
 /*
  * Function: mosquitto_disconnect_callback_set

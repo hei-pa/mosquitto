@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2009-2016 Roger Light <roger@atchoo.org>
+Copyright (c) 2009-2018 Roger Light <roger@atchoo.org>
 
 All rights reserved. This program and the accompanying materials
 are made available under the terms of the Eclipse Public License v1.0
@@ -396,7 +396,7 @@ int handle__connect(struct mosquitto_db *db, struct mosquitto *context)
 			rc = 1;
 			goto handle_connect_error;
 		}
-#ifdef REAL_WITH_TLS_PSK
+#ifdef WITH_TLS_PSK
 		if(context->listener->psk_hint){
 			/* Client should have provided an identity to get this far. */
 			if(!context->username){
@@ -405,7 +405,7 @@ int handle__connect(struct mosquitto_db *db, struct mosquitto *context)
 				goto handle_connect_error;
 			}
 		}else{
-#endif /* REAL_WITH_TLS_PSK */
+#endif /* WITH_TLS_PSK */
 			client_cert = SSL_get_peer_certificate(context->ssl);
 			if(!client_cert){
 				send__connack(context, 0, CONNACK_REFUSED_BAD_USERNAME_PASSWORD);
@@ -451,9 +451,9 @@ int handle__connect(struct mosquitto_db *db, struct mosquitto *context)
 			}
 			X509_free(client_cert);
 			client_cert = NULL;
-#ifdef REAL_WITH_TLS_PSK
+#ifdef WITH_TLS_PSK
 		}
-#endif /* REAL_WITH_TLS_PSK */
+#endif /* WITH_TLS_PSK */
 	}else{
 #endif /* WITH_TLS */
 		if(username_flag){
@@ -558,7 +558,6 @@ int handle__connect(struct mosquitto_db *db, struct mosquitto *context)
 		}
 
 		found_context->clean_session = true;
-		found_context->state = mosq_cs_disconnecting;
 		do_disconnect(db, found_context);
 	}
 
