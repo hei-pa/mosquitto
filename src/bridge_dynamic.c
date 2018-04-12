@@ -9,9 +9,22 @@ Contributor:
    Tifaifai Maupiti - Initial implementation and documentation.
 */
 
+#define _POSIX_C_SOURCE 200809L
+
 #include <stdio.h>
 #include <string.h>
 
+#ifndef WIN32
+#include <unistd.h>
+#include <strings.h>
+#else
+#include <process.h>
+#include <winsock2.h>
+#define snprintf sprintf_s
+#define strncasecmp _strnicmp
+#endif
+
+#include "config.h"
 #include "mosquitto_broker_internal.h"
 #include "mqtt3_protocol.h"
 #include "memory_mosq.h"

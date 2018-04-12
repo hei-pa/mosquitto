@@ -14,6 +14,8 @@ Contributors:
    Tifaifai Maupiti - initial implementation and documentation.
 */
 
+#define _POSIX_C_SOURCE 200809L
+
 #include <errno.h>
 #include <fcntl.h>
 #include <stdio.h>
@@ -307,7 +309,7 @@ int main(int argc, char *argv[])
         fprintf(stderr, "Error: Publish returned %d, disconnecting.\n", rc2);
         mosquitto_disconnect(mosq);
       }
-      while(wait)usleep(10000);
+      while(wait);
     }
 
     mosquitto_disconnect(mosq);
