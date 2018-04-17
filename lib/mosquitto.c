@@ -19,7 +19,9 @@ Contributors:
 #include <errno.h>
 #include <signal.h>
 #include <string.h>
+#ifndef WIN32
 #include <sys/time.h>
+#endif
 
 #include "mosquitto.h"
 #include "mosquitto_internal.h"
@@ -126,6 +128,9 @@ int mosquitto_reinitialise(struct mosquitto *mosq, const char *id, bool clean_se
 	if(id){
 		if(STREMPTY(id)){
 			return MOSQ_ERR_INVAL;
+		}
+		if(mosquitto_validate_utf8(id, strlen(id))){
+			return MOSQ_ERR_MALFORMED_UTF8;
 		}
 		mosq->id = mosquitto__strdup(id);
 	}else{

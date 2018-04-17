@@ -36,6 +36,9 @@ reallyclean :
 	$(MAKE) -C test reallyclean
 	-rm -f *.orig
 
+ptest : mosquitto
+	$(MAKE) -C test ptest
+
 test : mosquitto
 	$(MAKE) -C test test
 
@@ -52,7 +55,7 @@ endif
 
 uninstall :
 	set -e; for d in ${DIRS}; do $(MAKE) -C $${d} uninstall; done
-	rm -f "${DESTDIR}/etc/mosquitto/mosquitto.conf"
+	rm -f "${DESTDIR}/etc/mosquitto/mosquitto.conf.example"
 	rm -f "${DESTDIR}/etc/mosquitto/aclfile.example"
 	rm -f "${DESTDIR}/etc/mosquitto/pwfile.example"
 	rm -f "${DESTDIR}/etc/mosquitto/pskfile.example"

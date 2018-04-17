@@ -292,6 +292,14 @@ int handle__connect(struct mosquitto_db *db, struct mosquitto *context)
 			rc = 1;
 			goto handle_connect_error;
 		}
+		if(mosquitto_validate_utf8(will_topic, slen)){
+			log__printf(NULL, MOSQ_LOG_INFO,
+					"Malformed UTF-8 in will topic string from %s, disconnecting.",
+					client_id);
+
+			rc = 1;
+			goto handle_connect_error;
+		}
 
 		if(context->listener->mount_point){
 			slen = strlen(context->listener->mount_point) + strlen(will_topic) + 1;
@@ -381,6 +389,11 @@ int handle__connect(struct mosquitto_db *db, struct mosquitto *context)
 				goto handle_connect_error;
 			}
 		}
+	}
+	if(context->in_packet.pos != context->in_packet.remaining_length){
+		/* Surplus data at end of packet, this must be an error. */
+		rc = MOSQ_ERR_PROTOCOL;
+		goto handle_connect_error;
 	}
 
 #ifdef WITH_TLS

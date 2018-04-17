@@ -14,13 +14,15 @@ Contributors:
    Roger Light - initial implementation and documentation.
 */
 
+#include "config.h"
+
+#include "mosquitto_broker_internal.h"
+#include "mosquitto_internal.h"
+#include "mosquitto_broker.h"
+
 #ifdef WITH_TLS
 #  include <openssl/ssl.h>
 #endif
-
-#include "mosquitto_internal.h"
-#include "mosquitto_broker.h"
-#include "mosquitto_broker_internal.h"
 
 const char *mosquitto_client_address(const struct mosquitto *client)
 {
