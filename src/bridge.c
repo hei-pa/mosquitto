@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2009-2016 Roger Light <roger@atchoo.org>
+Copyright (c) 2009-2018 Roger Light <roger@atchoo.org>
 
 All rights reserved. This program and the accompanying materials
 are made available under the terms of the Eclipse Public License v1.0
@@ -14,6 +14,8 @@ Contributors:
    Roger Light - initial implementation and documentation.
 */
 
+#include "config.h"
+
 #include <assert.h>
 #include <errno.h>
 #include <stdio.h>
@@ -26,8 +28,6 @@ Contributors:
 #include <winsock2.h>
 #include <ws2tcpip.h>
 #endif
-
-#include "config.h"
 
 #include "mosquitto.h"
 #include "mosquitto_broker_internal.h"
@@ -82,7 +82,7 @@ int bridge__new(struct mosquitto_db *db, struct mosquitto__bridge *bridge)
 	new_context->tls_cert_reqs = SSL_VERIFY_PEER;
 	new_context->tls_version = new_context->bridge->tls_version;
 	new_context->tls_insecure = new_context->bridge->tls_insecure;
-#ifdef REAL_WITH_TLS_PSK
+#ifdef WITH_TLS_PSK
 	new_context->tls_psk_identity = new_context->bridge->tls_psk_identity;
 	new_context->tls_psk = new_context->bridge->tls_psk;
 #endif

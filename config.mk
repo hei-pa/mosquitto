@@ -89,6 +89,9 @@ WITH_STATIC_LIBRARIES:=no
 # Build with async dns lookup support for bridges (temporary). Requires glibc.
 #WITH_ADNS:=yes
 
+# Build with epoll support.
+WITH_EPOLL:=yes
+
 # =============================================================================
 # End of user configuration
 # =============================================================================
@@ -105,7 +108,6 @@ SOVERSION=1
 XSLTPROC=xsltproc
 # For html generation
 DB_HTML_XSL=man/html.xsl
-TIMESTAMP:=$(shell date "+%F %T%z")
 
 #MANCOUNTRIES=en_GB
 
@@ -121,12 +123,12 @@ else
 	CFLAGS?=-Wall -ggdb -O2
 endif
 
-LIB_CFLAGS:=${CFLAGS} ${CPPFLAGS} -I. -I.. -I../lib
-LIB_CXXFLAGS:=$(LIB_CFLAGS) ${CPPFLAGS}
+LIB_CFLAGS:=${CFLAGS} ${CPPFLAGS} -I. -I.. -I../lib -std=c99
+LIB_CXXFLAGS:=$(CFLAGS) ${CPPFLAGS} -I. -I.. -I../lib
 LIB_LDFLAGS:=${LDFLAGS}
 
-BROKER_CFLAGS:=${LIB_CFLAGS} ${CPPFLAGS} -DVERSION="\"${VERSION}\"" -DTIMESTAMP="\"${TIMESTAMP}\"" -DWITH_BROKER
-CLIENT_CFLAGS:=${CFLAGS} ${CPPFLAGS} -I../lib -DVERSION="\"${VERSION}\""
+BROKER_CFLAGS:=${LIB_CFLAGS} ${CPPFLAGS} -DVERSION="\"${VERSION}\"" -DWITH_BROKER -std=c99
+CLIENT_CFLAGS:=${CFLAGS} ${CPPFLAGS} -I../lib -DVERSION="\"${VERSION}\"" -std=c99
 
 ifneq ($(or $(findstring $(UNAME),FreeBSD), $(findstring $(UNAME),OpenBSD)),)
 	BROKER_LIBS:=-lm
@@ -167,10 +169,6 @@ endif
 ifeq ($(UNAME),QNX)
 	BROKER_LIBS:=$(BROKER_LIBS) -lsocket
 	LIB_LIBS:=$(LIB_LIBS) -lsocket
-endif
-
-ifeq ($(UNAME),Linux)
-	BROKER_LIBS:=$(BROKER_LIBS) -lanl
 endif
 
 ifeq ($(WITH_WRAP),yes)
@@ -276,3 +274,10 @@ STRIP?=strip
 ifeq ($(WITH_STRIP),yes)
 	STRIP_OPTS:=-s --strip-program=${CROSS_COMPILE}${STRIP}
 endif
+
+ifeq ($(WITH_EPOLL),yes)
+	ifeq ($(UNAME),Linux)
+		BROKER_CFLAGS:=$(BROKER_CFLAGS) -DWITH_EPOLL
+	endif
+endif
+

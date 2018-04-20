@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2010-2016 Roger Light <roger@atchoo.org>
+Copyright (c) 2010-2018 Roger Light <roger@atchoo.org>
 
 All rights reserved. This program and the accompanying materials
 are made available under the terms of the Eclipse Public License v1.0
@@ -12,6 +12,7 @@ and the Eclipse Distribution License is available at
  
 Contributors:
    Roger Light - initial implementation and documentation.
+   Tatsuzo Osawa - Add epoll.
 */
 
 #ifndef MOSQUITTO_INTERNAL_H
@@ -187,6 +188,7 @@ struct mosquitto {
 	char *tls_psk_identity;
 	int tls_cert_reqs;
 	bool tls_insecure;
+	bool ssl_ctx_defaults;
 #endif
 	bool want_write;
 	bool want_connect;
@@ -230,6 +232,7 @@ struct mosquitto {
 	struct libwebsocket *wsi;
 #    endif
 #  endif
+	bool ws_want_write;
 #else
 #  ifdef WITH_SOCKS
 	char *socks5_host;
@@ -244,6 +247,7 @@ struct mosquitto {
 	struct mosquitto_message_all *out_messages;
 	struct mosquitto_message_all *out_messages_last;
 	void (*on_connect)(struct mosquitto *, void *userdata, int rc);
+	void (*on_connect_with_flags)(struct mosquitto *, void *userdata, int rc, int flags);
 	void (*on_disconnect)(struct mosquitto *, void *userdata, int rc);
 	void (*on_publish)(struct mosquitto *, void *userdata, int mid);
 	void (*on_message)(struct mosquitto *, void *userdata, const struct mosquitto_message *message);
@@ -273,8 +277,12 @@ struct mosquitto {
 	UT_hash_handle hh_sock;
 	struct mosquitto *for_free_next;
 #endif
+#ifdef WITH_EPOLL
+	uint32_t events;
+#endif
 };
 
 #define STREMPTY(str) (str[0] == '\0')
 
 #endif
+

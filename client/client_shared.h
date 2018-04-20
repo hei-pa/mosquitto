@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2014-2016 Roger Light <roger@atchoo.org>
+Copyright (c) 2014-2018 Roger Light <roger@atchoo.org>
 
 All rights reserved. This program and the accompanying materials
 are made available under the terms of the Eclipse Public License v1.0
@@ -71,7 +71,7 @@ struct mosq_config {
 	char *psk_identity;
 #  endif
 #endif
-	bool clean_session; /* sub */
+	bool clean_session;
 	char **topics; /* sub */
 	int topic_count; /* sub */
 	bool no_retain; /* sub */
@@ -84,6 +84,7 @@ struct mosq_config {
 	bool eol; /* sub */
 	int msg_count; /* sub */
 	char *format; /* sub */
+	int timeout; /* sub */
 #ifdef WITH_SOCKS
 	char *socks5_host;
 	int socks5_port;

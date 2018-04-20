@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2009-2016 Roger Light <roger@atchoo.org>
+Copyright (c) 2009-2018 Roger Light <roger@atchoo.org>
 
 All rights reserved. This program and the accompanying materials
 are made available under the terms of the Eclipse Public License v1.0
@@ -18,7 +18,7 @@ Contributors:
 
 #ifndef WIN32
 /* For initgroups() */
-#  define _BSD_SOURCE
+#  define _DEFAULT_SOURCE
 #  include <unistd.h>
 #  include <grp.h>
 #  include <assert.h>
@@ -232,6 +232,10 @@ int main(int argc, char *argv[])
 	srand(tv.tv_sec + tv.tv_usec);
 #endif
 
+#ifdef WIN32
+	_setmaxstdio(2048);
+#endif
+
 	memset(&int_db, 0, sizeof(struct mosquitto_db));
 
 	net__init();
@@ -246,7 +250,7 @@ int main(int argc, char *argv[])
 	}
 
 	if(config.daemon && config.pid_file){
-		pid = mosquitto__fopen(config.pid_file, "wt");
+		pid = mosquitto__fopen(config.pid_file, "wt", false);
 		if(pid){
 			fprintf(pid, "%d", getpid());
 			fclose(pid);
@@ -268,7 +272,7 @@ int main(int argc, char *argv[])
 		rc = 1;
 		return rc;
 	}
-	log__printf(NULL, MOSQ_LOG_INFO, "mosquitto version %s (build date %s) starting", VERSION, TIMESTAMP);
+	log__printf(NULL, MOSQ_LOG_INFO, "mosquitto version %s starting", VERSION);
 	if(config.config_file){
 		log__printf(NULL, MOSQ_LOG_INFO, "Config loaded from %s.", config.config_file);
 	}else{
@@ -365,18 +369,22 @@ int main(int argc, char *argv[])
 	log__printf(NULL, MOSQ_LOG_INFO, "mosquitto version %s terminating", VERSION);
 	log__close(&config);
 
-#ifdef WITH_PERSISTENCE
-	if(config.persistence){
-		persist__backup(&int_db, true);
-	}
-#endif
-
 #ifdef WITH_WEBSOCKETS
 	for(i=0; i<int_db.config->listener_count; i++){
 		if(int_db.config->listeners[i].ws_context){
 			libwebsocket_context_destroy(int_db.config->listeners[i].ws_context);
 		}
 		mosquitto__free(int_db.config->listeners[i].ws_protocol);
+	}
+#endif
+
+	HASH_ITER(hh_id, int_db.contexts_by_id, ctxt, ctxt_tmp){
+		context__send_will(&int_db, ctxt);
+	}
+
+#ifdef WITH_PERSISTENCE
+	if(config.persistence){
+		persist__backup(&int_db, true);
 	}
 #endif
 

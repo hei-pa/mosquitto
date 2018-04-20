@@ -3,16 +3,32 @@ import os
 import socket
 import subprocess
 import struct
+import sys
 import time
 
-def start_broker(filename, cmd=None, port=1888):
+def start_broker(filename, cmd=None, port=0, use_conf=False):
     delay = 0.1
-    if cmd is None:
+
+    if use_conf == True:
         cmd = ['../../src/mosquitto', '-v', '-c', filename.replace('.py', '.conf')]
+
+        if port == 0:
+            port = 1888
+    else:
+        if cmd is None and port != 0:
+            cmd = ['../../src/mosquitto', '-v', '-p', str(port)]
+        elif cmd is None and port == 0:
+            port = 1888
+            cmd = ['../../src/mosquitto', '-v', '-c', filename.replace('.py', '.conf')]
+        elif cmd is not None and port == 0:
+            port = 1888
+            
     if os.environ.get('MOSQ_USE_VALGRIND') is not None:
         cmd = ['valgrind', '--trace-children=yes', '--leak-check=full', '--show-leak-kinds=all', '--log-file='+filename+'.vglog'] + cmd
         delay = 1
 
+    #print(port)
+    #print(cmd)
     broker = subprocess.Popen(cmd, stderr=subprocess.PIPE)
     for i in range(0, 20):
         time.sleep(delay)
@@ -29,12 +45,13 @@ def start_broker(filename, cmd=None, port=1888):
             return broker
     raise IOError
 
-def start_client(filename, cmd, env):
+def start_client(filename, cmd, env, port=1888):
     if cmd is None:
         raise ValueError
     if os.environ.get('MOSQ_USE_VALGRIND') is not None:
         cmd = ['valgrind', '-q', '--log-file='+filename+'.vglog'] + cmd
 
+    cmd = cmd + [str(port)]
     return subprocess.Popen(cmd, env=env)
 
 def expect_packet(sock, name, expected):
@@ -52,11 +69,11 @@ def packet_matches(name, recvd, expected):
         try:
             print("Received: "+to_string(recvd))
         except struct.error:
-            print("Received (not decoded): "+recvd)
+            print("Received (not decoded, len=%d): %s" % (len(recvd), recvd))
         try:
             print("Expected: "+to_string(expected))
         except struct.error:
-            print("Expected (not decoded): "+expected)
+            print("Expected (not decoded, len=%d): %s" % (len(expected), expected))
 
         return 0
     else:
@@ -89,6 +106,19 @@ def remaining_length(packet):
             break
 
     return (packet, rl)
+
+
+def to_hex_string(packet):
+    if len(packet) == 0:
+        return ""
+
+    s = ""
+    while len(packet) > 0:
+        packet0 = struct.unpack("!B", packet[0])
+        s = s+hex(packet0[0]) + " "
+        packet = packet[1:]
+
+    return s
 
 
 def to_string(packet):
@@ -149,6 +179,9 @@ def to_string(packet):
             pack_format = "!" + str(slen)+'s' + str(len(packet)-slen) + 's'
             (password, packet) = struct.unpack(pack_format, packet)
             s = s+", password="+password
+
+        if flags&1:
+            s = s+", reserved=1"
 
         return s
     elif cmd == 0x20:
@@ -250,7 +283,7 @@ def to_string(packet):
         # Reserved
         return "0xF0"
 
-def gen_connect(client_id, clean_session=True, keepalive=60, username=None, password=None, will_topic=None, will_qos=0, will_retain=False, will_payload="", proto_ver=4):
+def gen_connect(client_id, clean_session=True, keepalive=60, username=None, password=None, will_topic=None, will_qos=0, will_retain=False, will_payload="", proto_ver=4, connect_reserved=False):
     if (proto_ver&0x7F) == 3 or proto_ver == 0:
         remaining_length = 12
     elif (proto_ver&0x7F) == 4:
@@ -262,6 +295,10 @@ def gen_connect(client_id, clean_session=True, keepalive=60, username=None, pass
         remaining_length = remaining_length + 2+len(client_id)
 
     connect_flags = 0
+
+    if connect_reserved:
+        connect_flags = connect_flags | 0x01
+
     if clean_session:
         connect_flags = connect_flags | 0x02
 
@@ -380,3 +417,26 @@ def pack_remaining_length(remaining_length):
         s = s + struct.pack("!B", byte)
         if remaining_length == 0:
             return s
+
+
+def get_port(count=1):
+    if count == 1:
+        if len(sys.argv) == 2:
+            return int(sys.argv[1])
+        else:
+            return 1888
+    else:
+        if len(sys.argv) == 1+count:
+            p = ()
+            for i in range(0, count):
+                p = p + (int(sys.argv[1+i]),)
+            return p
+        else:
+            return tuple(range(1888, 1888+count))
+
+
+def get_lib_port():
+    if len(sys.argv) == 3:
+        return int(sys.argv[2])
+    else:
+        return 1888

@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2010-2016 Roger Light <roger@atchoo.org>
+Copyright (c) 2010-2018 Roger Light <roger@atchoo.org>
 
 All rights reserved. This program and the accompanying materials
 are made available under the terms of the Eclipse Public License v1.0
@@ -79,6 +79,16 @@ static int persist__client_messages_write(struct mosquitto_db *db, FILE *db_fptr
 
 	cmsg = queue;
 	while(cmsg){
+		if(!strncmp(cmsg->store->topic, "$SYS", 4)
+				&& cmsg->store->ref_count <= 1
+				&& cmsg->store->dest_id_count == 0){
+
+			/* This $SYS message won't have been persisted, so we can't persist
+			 * this client message. */
+			cmsg = cmsg->next;
+			continue;
+		}
+
 		slen = strlen(context->id);
 
 		length = htonl(sizeof(dbid_t) + sizeof(uint16_t) + sizeof(uint8_t) +
@@ -391,7 +401,7 @@ int persist__backup(struct mosquitto_db *db, bool shutdown)
 	}
 #endif
 
-	db_fptr = mosquitto__fopen(outfile, "wb");
+	db_fptr = mosquitto__fopen(outfile, "wb", true);
 	if(db_fptr == NULL){
 		log__printf(NULL, MOSQ_LOG_INFO, "Error saving in-memory database, unable to open %s for writing.", outfile);
 		goto error;
@@ -823,7 +833,7 @@ int persist__restore(struct mosquitto_db *db)
 
 	db->msg_store_load = NULL;
 
-	fptr = mosquitto__fopen(db->config->persistence_filepath, "rb");
+	fptr = mosquitto__fopen(db->config->persistence_filepath, "rb", false);
 	if(fptr == NULL) return MOSQ_ERR_SUCCESS;
 	rlen = fread(&header, 1, 15, fptr);
 	if(rlen == 0){

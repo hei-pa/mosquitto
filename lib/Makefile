@@ -3,6 +3,9 @@ include ../config.mk
 .PHONY : really clean install
 
 MOSQ_OBJS=mosquitto.o \
+		  actions.o \
+		  callbacks.o \
+		  connect.o \
 		  handle_connack.o \
 		  handle_ping.o \
 		  handle_pubackcomp.o \
@@ -13,9 +16,11 @@ MOSQ_OBJS=mosquitto.o \
 		  handle_unsuback.o \
 		  helpers.o \
 		  logging_mosq.o \
+		  loop.o \
 		  memory_mosq.o \
 		  messages_mosq.o \
 		  net_mosq.o \
+		  options.o \
 		  packet_mosq.o \
 		  read_handle.o \
 		  send_connect.o \
@@ -43,22 +48,22 @@ all : ${ALL_DEPS}
 	$(MAKE) -C cpp
 
 install : all
-	$(INSTALL) -d ${DESTDIR}$(prefix)/lib${LIB_SUFFIX}/
-	$(INSTALL) ${STRIP_OPTS} libmosquitto.so.${SOVERSION} ${DESTDIR}${prefix}/lib${LIB_SUFFIX}/libmosquitto.so.${SOVERSION}
-	ln -sf libmosquitto.so.${SOVERSION} ${DESTDIR}${prefix}/lib${LIB_SUFFIX}/libmosquitto.so
+	$(INSTALL) -d "${DESTDIR}$(prefix)/lib${LIB_SUFFIX}/"
+	$(INSTALL) ${STRIP_OPTS} libmosquitto.so.${SOVERSION} "${DESTDIR}${prefix}/lib${LIB_SUFFIX}/libmosquitto.so.${SOVERSION}"
+	ln -sf libmosquitto.so.${SOVERSION} "${DESTDIR}${prefix}/lib${LIB_SUFFIX}/libmosquitto.so"
 ifeq ($(WITH_STATIC_LIBRARIES),yes)
-	$(INSTALL) libmosquitto.a ${DESTDIR}${prefix}/lib${LIB_SUFFIX}/libmosquitto.a
-	${CROSS_COMPILE}${STRIP} -g --strip-unneeded ${DESTDIR}${prefix}/lib${LIB_SUFFIX}/libmosquitto.a
+	$(INSTALL) libmosquitto.a "${DESTDIR}${prefix}/lib${LIB_SUFFIX}/libmosquitto.a"
+	${CROSS_COMPILE}${STRIP} -g --strip-unneeded "${DESTDIR}${prefix}/lib${LIB_SUFFIX}/libmosquitto.a"
 endif
-	$(INSTALL) -d ${DESTDIR}${prefix}/include/
-	$(INSTALL) mosquitto.h ${DESTDIR}${prefix}/include/mosquitto.h
+	$(INSTALL) -d "${DESTDIR}${prefix}/include/"
+	$(INSTALL) mosquitto.h "${DESTDIR}${prefix}/include/mosquitto.h"
 	$(MAKE) -C cpp install
 
 uninstall :
-	-rm -f ${DESTDIR}${prefix}/lib${LIB_SUFFIX}/libmosquitto.so.${SOVERSION}
-	-rm -f ${DESTDIR}${prefix}/lib${LIB_SUFFIX}/libmosquitto.so
-	-rm -f ${DESTDIR}${prefix}/lib${LIB_SUFFIX}/libmosquitto.a
-	-rm -f ${DESTDIR}${prefix}/include/mosquitto.h
+	-rm -f "${DESTDIR}${prefix}/lib${LIB_SUFFIX}/libmosquitto.so.${SOVERSION}"
+	-rm -f "${DESTDIR}${prefix}/lib${LIB_SUFFIX}/libmosquitto.so"
+	-rm -f "${DESTDIR}${prefix}/lib${LIB_SUFFIX}/libmosquitto.a"
+	-rm -f "${DESTDIR}${prefix}/include/mosquitto.h"
 
 reallyclean : clean
 
@@ -72,7 +77,16 @@ libmosquitto.so.${SOVERSION} : ${MOSQ_OBJS}
 libmosquitto.a : ${MOSQ_OBJS}
 	${CROSS_COMPILE}$(AR) cr $@ $^
 
-mosquitto.o : mosquitto.c mosquitto.h
+mosquitto.o : mosquitto.c mosquitto.h mosquitto_internal.h
+	${CROSS_COMPILE}$(CC) $(LIB_CFLAGS) -c $< -o $@
+
+actions.o : actions.c mosquitto.h mosquitto_internal.h
+	${CROSS_COMPILE}$(CC) $(LIB_CFLAGS) -c $< -o $@
+
+callbacks.o : callbacks.c mosquitto.h mosquitto_internal.h
+	${CROSS_COMPILE}$(CC) $(LIB_CFLAGS) -c $< -o $@
+
+connect.o : connect.c mosquitto.h mosquitto_internal.h
 	${CROSS_COMPILE}$(CC) $(LIB_CFLAGS) -c $< -o $@
 
 handle_connack.o : handle_connack.c read_handle.h
@@ -105,6 +119,9 @@ helpers.o : helpers.c
 logging_mosq.o : logging_mosq.c logging_mosq.h
 	${CROSS_COMPILE}$(CC) $(LIB_CFLAGS) -c $< -o $@
 
+loop.o : loop.c mosquitto.h mosquitto_internal.h
+	${CROSS_COMPILE}$(CC) $(LIB_CFLAGS) -c $< -o $@
+
 messages_mosq.o : messages_mosq.c messages_mosq.h
 	${CROSS_COMPILE}$(CC) $(LIB_CFLAGS) -c $< -o $@
 
@@ -112,6 +129,9 @@ memory_mosq.o : memory_mosq.c memory_mosq.h
 	${CROSS_COMPILE}$(CC) $(LIB_CFLAGS) -c $< -o $@
 
 net_mosq.o : net_mosq.c net_mosq.h
+	${CROSS_COMPILE}$(CC) $(LIB_CFLAGS) -c $< -o $@
+
+options.o : options.c mosquitto.h mosquitto_internal.h
 	${CROSS_COMPILE}$(CC) $(LIB_CFLAGS) -c $< -o $@
 
 packet_mosq.o : packet_mosq.c packet_mosq.h

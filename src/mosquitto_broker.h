@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2012-2016 Roger Light <roger@atchoo.org>
+Copyright (c) 2012-2018 Roger Light <roger@atchoo.org>
 
 All rights reserved. This program and the accompanying materials
 are made available under the terms of the Eclipse Public License v1.0
@@ -37,6 +37,7 @@ enum mosquitto_protocol {
  *
  * ========================================================================= */
 
+
 /*
  * Function: mosquitto_log_printf
  *
@@ -71,8 +72,7 @@ void mosquitto_log_printf(int level, const char *fmt, ...);
 /*
  * Function: mosquitto_client_address
  *
- * Retrieve the username associated with a client, or NULL if the client
- * provided no username.
+ * Retrieve the IP address of the client as a string.
  */
 const char *mosquitto_client_address(const struct mosquitto *client);
 

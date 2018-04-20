@@ -30,6 +30,7 @@
 				<arg choice='plain'><option>-L</option> <replaceable>URL</replaceable></arg>
 			</group>
 			<arg><option>-A</option> <replaceable>bind_address</replaceable></arg>
+			<arg><option>-c</option></arg>
 			<arg><option>-d</option></arg>
 			<arg><option>-i</option> <replaceable>client_id</replaceable></arg>
 			<arg><option>-I</option> <replaceable>client id prefix</replaceable></arg>
@@ -90,6 +91,19 @@
 	</refsect1>
 
 	<refsect1>
+		<title>Encrypted Connections</title>
+		<para><command>mosquitto_pub</command> supports TLS encrypted
+			connections. It is strongly recommended that you use an encrypted
+			connection for anything more than the most basic setup.</para>
+		<para>To enable TLS connections when using x509 certificates, one of
+			either <option>--cafile</option> or <option>--capath</option> must
+			be provided as an option.</para>
+		<para>To enable TLS connections when using TLS-PSK, you must use the
+			<option>--psk</option> and the <option>--psk-identity</option>
+			options.</para>
+	</refsect1>
+
+	<refsect1>
 		<title>Options</title>
 		<para>The options below may be given on the command line, but may also
 			be placed in a config file located at
@@ -114,6 +128,19 @@
 				</listitem>
 			</varlistentry>
 			<varlistentry>
+				<term><option>-c</option></term>
+				<term><option>--disable-clean-session</option></term>
+				<listitem>
+					<para>Disable the 'clean session' flag. This means that all
+					of the subscriptions for the client will be maintained
+					after it disconnects, along with subsequent QoS 1 and QoS 2
+					messages that arrive. When the client reconnects, it will
+					receive all of the queued messages.</para>
+					<para>If using this option, the client id must be set
+						manually with <option>--id</option></para>
+				</listitem>
+			</varlistentry>
+			<varlistentry>
 				<term><option>--cafile</option></term>
 				<listitem>
 					<para>Define the path to a file containing PEM encoded CA
@@ -130,7 +157,7 @@
 						communication.</para>
 					<para>For <option>--capath</option> to work correctly, the
 						certificate files must have ".crt" as the file ending
-						and you must run "c_rehash &lt;path to capath&gt;" each
+						and you must run "openssl rehash &lt;path to capath&gt;" each
 						time you add/remove a certificate.</para>
 					<para>See also <option>--cafile</option></para>
 				</listitem>
@@ -497,7 +524,7 @@
 	<refsect1>
 		<title>Bugs</title>
 		<para><command>mosquitto</command> bug information can be found at
-			<uri type="webpage">https://github.com/eclipse/mosquitto/issues</uri></para>
+			<ulink url="https://github.com/eclipse/mosquitto/issues"/></para>
 	</refsect1>
 
 	<refsect1>

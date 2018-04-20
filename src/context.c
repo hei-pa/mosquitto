@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2009-2016 Roger Light <roger@atchoo.org>
+Copyright (c) 2009-2018 Roger Light <roger@atchoo.org>
 
 All rights reserved. This program and the accompanying materials
 are made available under the terms of the Eclipse Public License v1.0
@@ -34,6 +34,7 @@ struct mosquitto *context__init(struct mosquitto_db *db, mosq_sock_t sock)
 	context = mosquitto__calloc(1, sizeof(struct mosquitto));
 	if(!context) return NULL;
 	
+	context->pollfd_index = -1;
 	context->state = mosq_cs_new;
 	context->sock = sock;
 	context->last_msg_in = mosquitto_time();
@@ -102,12 +103,6 @@ void context__cleanup(struct mosquitto_db *db, struct mosquitto *context, bool d
 
 	if(!context) return;
 
-	mosquitto__free(context->username);
-	context->username = NULL;
-
-	mosquitto__free(context->password);
-	context->password = NULL;
-
 #ifdef WITH_BRIDGE
 	if(context->bridge){
 		for(i=0; i<db->bridge_count; i++){
@@ -124,16 +119,29 @@ void context__cleanup(struct mosquitto_db *db, struct mosquitto *context, bool d
 		mosquitto__free(context->bridge->local_password);
 		context->bridge->local_password = NULL;
 
-		mosquitto__free(context->bridge->remote_clientid);
+		if(context->bridge->remote_clientid != context->id){
+			mosquitto__free(context->bridge->remote_clientid);
+		}
 		context->bridge->remote_clientid = NULL;
 
-		mosquitto__free(context->bridge->remote_username);
+		if(context->bridge->remote_username != context->username){
+			mosquitto__free(context->bridge->remote_username);
+		}
 		context->bridge->remote_username = NULL;
 
-		mosquitto__free(context->bridge->remote_password);
+		if(context->bridge->remote_password != context->password){
+			mosquitto__free(context->bridge->remote_password);
+		}
 		context->bridge->remote_password = NULL;
 	}
 #endif
+
+	mosquitto__free(context->username);
+	context->username = NULL;
+
+	mosquitto__free(context->password);
+	context->password = NULL;
+
 	net__socket_close(db, context);
 	if((do_free || context->clean_session) && db){
 		sub__clean_session(db, context);
@@ -142,6 +150,8 @@ void context__cleanup(struct mosquitto_db *db, struct mosquitto *context, bool d
 
 	mosquitto__free(context->address);
 	context->address = NULL;
+
+	context__send_will(db, context);
 
 	if(context->id){
 		assert(db); /* db can only be NULL here if the client hasn't sent a
@@ -162,12 +172,6 @@ void context__cleanup(struct mosquitto_db *db, struct mosquitto *context, bool d
 		packet = context->out_packet;
 		context->out_packet = context->out_packet->next;
 		mosquitto__free(packet);
-	}
-	if(context->will){
-		mosquitto__free(context->will->topic);
-		mosquitto__free(context->will->payload);
-		mosquitto__free(context->will);
-		context->will = NULL;
 	}
 	if(do_free || context->clean_session){
 		msg = context->inflight_msgs;
@@ -194,7 +198,8 @@ void context__cleanup(struct mosquitto_db *db, struct mosquitto *context, bool d
 	}
 }
 
-void context__disconnect(struct mosquitto_db *db, struct mosquitto *ctxt)
+
+void context__send_will(struct mosquitto_db *db, struct mosquitto *ctxt)
 {
 	if(ctxt->state != mosq_cs_disconnecting && ctxt->will){
 		if(mosquitto_acl_check(db, ctxt, ctxt->will->topic, MOSQ_ACL_WRITE) == MOSQ_ERR_SUCCESS){
@@ -208,6 +213,13 @@ void context__disconnect(struct mosquitto_db *db, struct mosquitto *ctxt)
 		mosquitto__free(ctxt->will);
 		ctxt->will = NULL;
 	}
+}
+
+
+void context__disconnect(struct mosquitto_db *db, struct mosquitto *ctxt)
+{
+	context__send_will(db, ctxt);
+
 	ctxt->disconnect_t = time(NULL);
 	net__socket_close(db, ctxt);
 }

@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2009-2016 Roger Light <roger@atchoo.org>
+Copyright (c) 2009-2018 Roger Light <roger@atchoo.org>
 
 All rights reserved. This program and the accompanying materials
 are made available under the terms of the Eclipse Public License v1.0
@@ -69,7 +69,7 @@ int log__init(struct mosquitto__config *config)
 		if(drop_privileges(config, true)){
 			return 1;
 		}
-		config->log_fptr = mosquitto__fopen(config->log_file, "at");
+		config->log_fptr = mosquitto__fopen(config->log_file, "at", true);
 		if(!config->log_fptr){
 			log_destinations = MQTT3_LOG_STDERR;
 			log_priorities = MOSQ_LOG_ERR;

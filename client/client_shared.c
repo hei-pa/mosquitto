@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2014-2016 Roger Light <roger@atchoo.org>
+Copyright (c) 2014-2018 Roger Light <roger@atchoo.org>
 
 All rights reserved. This program and the accompanying materials
 are made available under the terms of the Eclipse Public License v1.0
@@ -14,6 +14,7 @@ Contributors:
    Roger Light - initial implementation and documentation.
 */
 
+#define _POSIX_C_SOURCE 200809L
 
 #include <errno.h>
 #include <fcntl.h>
@@ -22,10 +23,12 @@ Contributors:
 #include <string.h>
 #ifndef WIN32
 #include <unistd.h>
+#include <strings.h>
 #else
 #include <process.h>
 #include <winsock2.h>
 #define snprintf sprintf_s
+#define strncasecmp _strnicmp
 #endif
 
 #include <mosquitto.h>
@@ -70,7 +73,7 @@ static int check_format(struct mosq_config *cfg, const char *str)
 					// JSON output, assuming JSON payload
 				}else if(str[i+1] == 'U'){
 					// Unix time+nanoseconds
-				}else if(str[i+1] == 'x'){
+				}else if(str[i+1] == 'x' || str[i+1] == 'X'){
 					// payload in hex
 				}else{
 					fprintf(stderr, "Error: Invalid format specifier '%c'.\n", str[i+1]);
@@ -123,7 +126,7 @@ void init_config(struct mosq_config *cfg)
 	cfg->keepalive = 60;
 	cfg->clean_session = true;
 	cfg->eol = true;
-	cfg->protocol_version = MQTT_PROTOCOL_V31;
+	cfg->protocol_version = MQTT_PROTOCOL_V311;
 }
 
 void client_config_cleanup(struct mosq_config *cfg)
@@ -317,11 +320,12 @@ int client_config_load(struct mosq_config *cfg, int pub_or_sub, int argc, char *
 	}
 #endif
 
+	if(cfg->clean_session == false && (cfg->id_prefix || !cfg->id)){
+		if(!cfg->quiet) fprintf(stderr, "Error: You must provide a client id if you are using the -c option.\n");
+		return 1;
+	}
+
 	if(pub_or_sub == CLIENT_SUB){
-		if(cfg->clean_session == false && (cfg->id_prefix || !cfg->id)){
-			if(!cfg->quiet) fprintf(stderr, "Error: You must provide a client id if you are using the -c option.\n");
-			return 1;
-		}
 		if(cfg->topic_count == 0){
 			if(!cfg->quiet) fprintf(stderr, "Error: You must specify a topic to subscribe to.\n");
 			return 1;
@@ -433,6 +437,22 @@ int client_config_line_proc(struct mosq_config *cfg, int pub_or_sub, int argc, c
 					cfg->msg_count = atoi(argv[i+1]);
 					if(cfg->msg_count < 1){
 						fprintf(stderr, "Error: Invalid message count \"%d\".\n\n", cfg->msg_count);
+						return 1;
+					}
+				}
+				i++;
+			}
+		}else if(!strcmp(argv[i], "-W")){
+			if(pub_or_sub == CLIENT_PUB){
+				goto unknown_option;
+			}else{
+				if(i==argc-1){
+					fprintf(stderr, "Error: -W argument given but no timeout specified.\n\n");
+					return 1;
+				}else{
+					cfg->timeout = atoi(argv[i+1]);
+					if(cfg->timeout < 1){
+						fprintf(stderr, "Error: Invalid timeout \"%d\".\n\n", cfg->msg_count);
 						return 1;
 					}
 				}
@@ -834,9 +854,6 @@ int client_config_line_proc(struct mosq_config *cfg, int pub_or_sub, int argc, c
 			}
 			i++;
 		}else if(!strcmp(argv[i], "-c") || !strcmp(argv[i], "--disable-clean-session")){
-			if(pub_or_sub == CLIENT_PUB){
-				goto unknown_option;
-			}
 			cfg->clean_session = false;
 		}else if(!strcmp(argv[i], "-N")){
 			if(pub_or_sub == CLIENT_PUB){
@@ -939,14 +956,14 @@ int client_id_generate(struct mosq_config *cfg, const char *id_base)
 		hostname[0] = '\0';
 		gethostname(hostname, 256);
 		hostname[255] = '\0';
-		len = strlen(id_base) + strlen("/-") + 6 + strlen(hostname);
+		len = strlen(id_base) + strlen("|-") + 6 + strlen(hostname);
 		cfg->id = malloc(len);
 		if(!cfg->id){
 			if(!cfg->quiet) fprintf(stderr, "Error: Out of memory.\n");
 			mosquitto_lib_cleanup();
 			return 1;
 		}
-		snprintf(cfg->id, len, "%s/%d-%s", id_base, getpid(), hostname);
+		snprintf(cfg->id, len, "%s|%d-%s", id_base, getpid(), hostname);
 		if(strlen(cfg->id) > MOSQ_MQTT_ID_MAX_LENGTH){
 			/* Enforce maximum client id length of 23 characters */
 			cfg->id[MOSQ_MQTT_ID_MAX_LENGTH] = '\0';
