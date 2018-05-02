@@ -40,20 +40,13 @@ int mosquitto_security_init_default(struct mosquitto_db *db, bool reload)
 {
 	int rc;
 	int i;
-<<<<<<< HEAD
-=======
 	char *pwf;
 	char *pskf;
->>>>>>> develop
 
 	/* Load username/password data if required. */
 	if(db->config->per_listener_settings){
 		for(i=0; i<db->config->listener_count; i++){
-<<<<<<< HEAD
-			char *pwf = db->config->listeners[i].security_options.password_file;
-=======
 			pwf = db->config->listeners[i].security_options.password_file;
->>>>>>> develop
 			if(pwf){
 				rc = unpwd__file_parse(&db->config->listeners[i].unpwd, pwf);
 				if(rc){
@@ -99,11 +92,7 @@ int mosquitto_security_init_default(struct mosquitto_db *db, bool reload)
 	/* Load psk data if required. */
 	if(db->config->per_listener_settings){
 		for(i=0; i<db->config->listener_count; i++){
-<<<<<<< HEAD
-			char *pskf = db->config->listeners[i].security_options.psk_file;
-=======
 			pskf = db->config->listeners[i].security_options.psk_file;
->>>>>>> develop
 			if(pskf){
 				rc = psk__file_parse(db, &db->config->listeners[i].psk_id, pskf);
 				if(rc){
@@ -130,10 +119,7 @@ int mosquitto_security_cleanup_default(struct mosquitto_db *db, bool reload)
 {
 	int rc;
 	int i;
-<<<<<<< HEAD
-=======
 
->>>>>>> develop
 	rc = acl__cleanup(db, reload);
 	if(rc != MOSQ_ERR_SUCCESS) return rc;
 
