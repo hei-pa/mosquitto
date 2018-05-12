@@ -2043,6 +2043,7 @@ static int conf__parse_int(char **token, const char *name, int *value, char *sav
 
 static int conf__parse_string(char **token, const char *name, char **value, char *saveptr)
 {
+	int len;
 	*token = strtok_r(NULL, "", &saveptr);
 	if(*token){
 		if(*value){
@@ -2053,7 +2054,12 @@ static int conf__parse_string(char **token, const char *name, char **value, char
 		while((*token)[0] == ' ' || (*token)[0] == '\t'){
 			(*token)++;
 		}
-		if(mosquitto_validate_utf8(*token, strlen(*token))){
+		len = strlen(*token);
+		while((*token)[len-1] == ' '){
+			(*token)[len-1] = '\0';
+			len--;
+		}
+		if(mosquitto_validate_utf8(*token, len)){
 			log__printf(NULL, MOSQ_LOG_ERR, "Error: Malformed UTF-8 in configuration.");
 			return MOSQ_ERR_INVAL;
 		}
