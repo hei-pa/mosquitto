@@ -128,7 +128,7 @@ LIB_CXXFLAGS:=$(CFLAGS) ${CPPFLAGS} -I. -I.. -I../lib
 LIB_LDFLAGS:=${LDFLAGS}
 
 BROKER_CFLAGS:=${LIB_CFLAGS} ${CPPFLAGS} -DVERSION="\"${VERSION}\"" -DWITH_BROKER
-CLIENT_CFLAGS:=${CFLAGS} ${CPPFLAGS} -I../lib -DVERSION="\"${VERSION}\""
+CLIENT_CFLAGS:=${CFLAGS} ${CPPFLAGS} -I. -I.. -I../lib -I../src -DVERSION="\"${VERSION}\""
 
 ifneq ($(or $(findstring $(UNAME),FreeBSD), $(findstring $(UNAME),OpenBSD)),)
 	BROKER_LIBS:=-lm
@@ -169,6 +169,10 @@ endif
 ifeq ($(UNAME),QNX)
 	BROKER_LIBS:=$(BROKER_LIBS) -lsocket
 	LIB_LIBS:=$(LIB_LIBS) -lsocket
+endif
+
+ifeq ($(UNAME),Linux)
+	BROKER_LIBS:=$(BROKER_LIBS) -lanl
 endif
 
 ifeq ($(WITH_WRAP),yes)
@@ -280,4 +284,3 @@ ifeq ($(WITH_EPOLL),yes)
 		BROKER_CFLAGS:=$(BROKER_CFLAGS) -DWITH_EPOLL
 	endif
 endif
-
