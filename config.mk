@@ -245,11 +245,6 @@ ifeq ($(WITH_SRV),yes)
 	CLIENT_CFLAGS:=$(CLIENT_CFLAGS) -DWITH_SRV
 endif
 
-ifeq ($(WITH_WEBSOCKETS),yes)
-	BROKER_CFLAGS:=$(BROKER_CFLAGS) -DWITH_WEBSOCKETS
-	BROKER_LIBS:=$(BROKER_LIBS) -lwebsockets
-endif
-
 ifeq ($(UNAME),SunOS)
 	BROKER_LIBS:=$(BROKER_LIBS) -lsocket -lnsl
 	LIB_LIBS:=$(LIB_LIBS) -lsocket -lnsl
@@ -267,6 +262,16 @@ endif
 MAKE_ALL:=mosquitto
 ifeq ($(WITH_DOCS),yes)
 	MAKE_ALL:=$(MAKE_ALL) docs
+endif
+
+ifeq ($(WITH_WEBSOCKETS),yes)
+	BROKER_CFLAGS:=$(BROKER_CFLAGS) -DWITH_WEBSOCKETS
+	BROKER_LIBS:=$(BROKER_LIBS) -lwebsockets
+endif
+
+ifeq ($(WITH_WEBSOCKETS),static)
+	BROKER_CFLAGS:=$(BROKER_CFLAGS) -DWITH_WEBSOCKETS
+	BROKER_LIBS:=$(BROKER_LIBS) -static -lwebsockets
 endif
 
 INSTALL?=install
