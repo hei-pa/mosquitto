@@ -372,7 +372,7 @@ int main(int argc, char *argv[])
 #ifdef WITH_WEBSOCKETS
 	for(i=0; i<int_db.config->listener_count; i++){
 		if(int_db.config->listeners[i].ws_context){
-			libwebsocket_context_destroy(int_db.config->listeners[i].ws_context);
+			lws_context_destroy(int_db.config->listeners[i].ws_context);
 		}
 		mosquitto__free(int_db.config->listeners[i].ws_protocol);
 	}

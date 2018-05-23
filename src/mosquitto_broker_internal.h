@@ -23,22 +23,6 @@ Contributors:
 
 #ifdef WITH_WEBSOCKETS
 #  include <libwebsockets.h>
-
-#  if defined(LWS_LIBRARY_VERSION_NUMBER)
-#    define libwebsocket_callback_on_writable(A, B) lws_callback_on_writable((B))
-#    define libwebsocket_service(A, B) lws_service((A), (B))
-#    define libwebsocket_create_context(A) lws_create_context((A))
-#    define libwebsocket_context_destroy(A) lws_context_destroy((A))
-#    define libwebsocket_write(A, B, C, D) lws_write((A), (B), (C), (D))
-#    define libwebsocket_get_socket_fd(A) lws_get_socket_fd((A))
-#    define libwebsockets_return_http_status(A, B, C, D) lws_return_http_status((B), (C), (D))
-#    define libwebsockets_get_protocol(A) lws_get_protocol((A))
-
-#    define libwebsocket_context lws_context
-#    define libwebsocket_protocols lws_protocols
-#    define libwebsocket_callback_reasons lws_callback_reasons
-#    define libwebsocket lws
-#  endif
 #endif
 
 #include "mosquitto_internal.h"
@@ -231,9 +215,9 @@ struct mosquitto__listener {
 	char *tls_version;
 #endif
 #ifdef WITH_WEBSOCKETS
-	struct libwebsocket_context *ws_context;
+	struct lws_context *ws_context;
 	char *http_dir;
-	struct libwebsocket_protocols *ws_protocol;
+	struct lws_protocols *ws_protocol;
 #endif
 	struct mosquitto__security_options security_options;
 	struct mosquitto__unpwd *unpwd;
@@ -631,11 +615,7 @@ DWORD WINAPI SigThreadProc(void* data);
  * Websockets related functions
  * ============================================================ */
 #ifdef WITH_WEBSOCKETS
-#  if defined(LWS_LIBRARY_VERSION_NUMBER)
 struct lws_context *mosq_websockets_init(struct mosquitto__listener *listener, int log_level);
-#  else
-struct libwebsocket_context *mosq_websockets_init(struct mosquitto__listener *listener, int log_level);
-#  endif
 #endif
 void do_disconnect(struct mosquitto_db *db, struct mosquitto *context);
 

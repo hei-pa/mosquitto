@@ -553,7 +553,7 @@ int mosquitto_main_loop(struct mosquitto_db *db, mosq_sock_t *listensock, int li
 			 * will soon, so for now websockets clients are second class
 			 * citizens. */
 			if(db->config->listeners[i].ws_context){
-				libwebsocket_service(db->config->listeners[i].ws_context, 0);
+				lws_service(db->config->listeners[i].ws_context, 0);
 			}
 		}
 		if(db->config->have_websockets_listener){
@@ -587,7 +587,7 @@ void do_disconnect(struct mosquitto_db *db, struct mosquitto *context)
 			context->state = mosq_cs_disconnect_ws;
 		}
 		if(context->wsi){
-			libwebsocket_callback_on_writable(context->ws_context, context->wsi);
+			lws_callback_on_writable(context->ws_context, context->wsi);
 		}
 		if(context->sock != INVALID_SOCKET){
 			HASH_DELETE(hh_sock, db->contexts_by_sock, context);
