@@ -241,7 +241,6 @@ struct mosquitto__listener {
 };
 
 struct mosquitto__config {
-	char *config_file;
 	bool allow_duplicate_messages;
 	bool allow_zero_length_clientid;
 	bool allow_sys_update;
@@ -274,7 +273,6 @@ struct mosquitto__config {
 	int sys_interval;
 	bool upgrade_outgoing_qos;
 	char *user;
-	bool verbose;
 #ifdef WITH_WEBSOCKETS
 	int websockets_log_level;
 	bool have_websockets_listener;
@@ -382,8 +380,10 @@ struct mosquitto_db{
 #endif
 	int msg_store_count;
 	unsigned long msg_store_bytes;
+	char *config_file;
 	struct mosquitto__config *config;
 	int auth_plugin_count;
+	bool verbose;
 #ifdef WITH_SYS_TREE
 	int subscription_count;
 	int retained_count;
@@ -491,14 +491,14 @@ struct mosquitto_db *mosquitto__get_db(void);
  * Config functions
  * ============================================================ */
 /* Initialise config struct to default values. */
-void config__init(struct mosquitto__config *config);
+void config__init(struct mosquitto_db *db, struct mosquitto__config *config);
 /* Parse command line options into config. */
-int config__parse_args(struct mosquitto__config *config, int argc, char *argv[]);
+int config__parse_args(struct mosquitto_db *db, struct mosquitto__config *config, int argc, char *argv[]);
 /* Read configuration data from config->config_file into config.
  * If reload is true, don't process config options that shouldn't be reloaded (listeners etc)
  * Returns 0 on success, 1 if there is a configuration error or if a file cannot be opened.
  */
-int config__read(struct mosquitto__config *config, bool reload);
+int config__read(struct mosquitto_db *db, struct mosquitto__config *config, bool reload);
 /* Free all config data. */
 void config__cleanup(struct mosquitto__config *config);
 int config__get_dir_files(const char *include_dir, char ***files, int *file_count);

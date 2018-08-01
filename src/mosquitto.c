@@ -240,8 +240,8 @@ int main(int argc, char *argv[])
 
 	net__init();
 
-	config__init(&config);
-	rc = config__parse_args(&config, argc, argv);
+	config__init(&int_db, &config);
+	rc = config__parse_args(&int_db, &config, argc, argv);
 	if(rc != MOSQ_ERR_SUCCESS) return rc;
 	int_db.config = &config;
 
@@ -273,8 +273,8 @@ int main(int argc, char *argv[])
 		return rc;
 	}
 	log__printf(NULL, MOSQ_LOG_INFO, "mosquitto version %s starting", VERSION);
-	if(config.config_file){
-		log__printf(NULL, MOSQ_LOG_INFO, "Config loaded from %s.", config.config_file);
+	if(int_db.config_file){
+		log__printf(NULL, MOSQ_LOG_INFO, "Config loaded from %s.", int_db.config_file);
 	}else{
 		log__printf(NULL, MOSQ_LOG_INFO, "Using default config.");
 	}

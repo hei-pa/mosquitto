@@ -534,7 +534,7 @@ int mosquitto_main_loop(struct mosquitto_db *db, mosq_sock_t *listensock, int li
 #endif
 		if(flag_reload){
 			log__printf(NULL, MOSQ_LOG_INFO, "Reloading config.");
-			config__read(db->config, true);
+			config__read(db, db->config, true);
 			mosquitto_security_cleanup(db, true);
 			mosquitto_security_init(db, true);
 			mosquitto_security_apply(db);

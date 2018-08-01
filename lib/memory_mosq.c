@@ -37,8 +37,32 @@ static unsigned long memcount = 0;
 static unsigned long max_memcount = 0;
 #endif
 
+#ifdef WITH_BROKER
+static size_t mem_limit = 0;
+void memory__set_limit(size_t lim)
+{
+#ifdef LINUX
+	struct rlimit r;
+
+	r.rlim_cur = lim;
+	r.rlim_max = lim;
+
+	setrlimit(RLIMIT_CPU, &r);
+
+	mem_limit = 0;
+#else
+	mem_limit = lim;
+#endif
+}
+#endif
+
 void *mosquitto__calloc(size_t nmemb, size_t size)
 {
+#ifdef REAL_WITH_MEMORY_TRACKING
+	if(mem_limit && memcount + size > mem_limit){
+		return NULL;
+	}
+#endif
 	void *mem = calloc(nmemb, size);
 
 #ifdef REAL_WITH_MEMORY_TRACKING
@@ -66,6 +90,11 @@ void mosquitto__free(void *mem)
 
 void *mosquitto__malloc(size_t size)
 {
+#ifdef REAL_WITH_MEMORY_TRACKING
+	if(mem_limit && memcount + size > mem_limit){
+		return NULL;
+	}
+#endif
 	void *mem = malloc(size);
 
 #ifdef REAL_WITH_MEMORY_TRACKING
@@ -94,6 +123,11 @@ unsigned long mosquitto__max_memory_used(void)
 
 void *mosquitto__realloc(void *ptr, size_t size)
 {
+#ifdef REAL_WITH_MEMORY_TRACKING
+	if(mem_limit && memcount + size > mem_limit){
+		return NULL;
+	}
+#endif
 	void *mem;
 #ifdef REAL_WITH_MEMORY_TRACKING
 	if(ptr){
@@ -116,6 +150,11 @@ void *mosquitto__realloc(void *ptr, size_t size)
 
 char *mosquitto__strdup(const char *s)
 {
+#ifdef REAL_WITH_MEMORY_TRACKING
+	if(mem_limit && memcount + strlen(s) > mem_limit){
+		return NULL;
+	}
+#endif
 	char *str = strdup(s);
 
 #ifdef REAL_WITH_MEMORY_TRACKING

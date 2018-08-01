@@ -27,7 +27,8 @@ Contributors:
 
 
 #ifdef WIN32
-#	include <process.h>
+#  include <windows.h>
+#  include <process.h>
 #	ifndef __cplusplus
 #		if defined(_MSC_VER) && _MSC_VER < 1900
 #			define bool char

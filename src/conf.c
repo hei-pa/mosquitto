@@ -143,23 +143,44 @@ static int conf__attempt_resolve(const char *host, const char *text, int log, co
 	return MOSQ_ERR_SUCCESS;
 }
 
-static void config__init_reload(struct mosquitto__config *config)
+
+static void config__init_reload(struct mosquitto_db *db, struct mosquitto__config *config)
 {
 	int i;
 	/* Set defaults */
 	for(i=0; i<config->listener_count; i++){
 		mosquitto__free(config->listeners[i].security_options.acl_file);
 		config->listeners[i].security_options.acl_file = NULL;
+
+		mosquitto__free(config->listeners[i].security_options.password_file);
+		config->listeners[i].security_options.password_file = NULL;
+
+		mosquitto__free(config->listeners[i].security_options.psk_file);
+		config->listeners[i].security_options.psk_file = NULL;
+
+		config->listeners[i].security_options.allow_anonymous = -1;
+		config->listeners[i].security_options.allow_zero_length_clientid = true;
+		config->listeners[i].security_options.auto_id_prefix = NULL;
+		config->listeners[i].security_options.auto_id_prefix_len = 0;
 	}
+
+	config->allow_duplicate_messages = false;
 
 	mosquitto__free(config->security_options.acl_file);
 	config->security_options.acl_file = NULL;
+
 	config->security_options.allow_anonymous = -1;
-	config->allow_duplicate_messages = false;
 	config->security_options.allow_zero_length_clientid = true;
 	config->security_options.auto_id_prefix = NULL;
 	config->security_options.auto_id_prefix_len = 0;
 	config->allow_sys_update = false;
+
+	mosquitto__free(config->security_options.password_file);
+	config->security_options.password_file = NULL;
+
+	mosquitto__free(config->security_options.psk_file);
+	config->security_options.psk_file = NULL;
+
 	config->autosave_interval = 1800;
 	config->autosave_on_changes = false;
 	mosquitto__free(config->clientid_prefixes);
@@ -185,23 +206,19 @@ static void config__init_reload(struct mosquitto__config *config)
 #else
 	config->log_facility = LOG_DAEMON;
 	config->log_dest = MQTT3_LOG_STDERR;
-	if(config->verbose){
+	if(db->verbose){
 		config->log_type = INT_MAX;
 	}else{
 		config->log_type = MOSQ_LOG_ERR | MOSQ_LOG_WARNING | MOSQ_LOG_NOTICE | MOSQ_LOG_INFO;
 	}
 #endif
 	config->log_timestamp = true;
-	mosquitto__free(config->security_options.password_file);
-	config->security_options.password_file = NULL;
 	config->persistence = false;
 	mosquitto__free(config->persistence_location);
 	config->persistence_location = NULL;
 	mosquitto__free(config->persistence_file);
 	config->persistence_file = NULL;
 	config->persistent_client_expiration = 0;
-	mosquitto__free(config->security_options.psk_file);
-	config->security_options.psk_file = NULL;
 	config->queue_qos0_messages = false;
 	config->set_tcp_nodelay = false;
 	config->sys_interval = 10;
@@ -238,11 +255,11 @@ static void config__cleanup_plugins(struct mosquitto__config *config)
 }
 
 
-void config__init(struct mosquitto__config *config)
+void config__init(struct mosquitto_db *db, struct mosquitto__config *config)
 {
 	memset(config, 0, sizeof(struct mosquitto__config));
-	config__init_reload(config);
-	config->config_file = NULL;
+	config__init_reload(db, config);
+
 	config->daemon = false;
 	memset(&config->default_listener, 0, sizeof(struct mosquitto__listener));
 	config->default_listener.max_connections = -1;
@@ -256,7 +273,6 @@ void config__cleanup(struct mosquitto__config *config)
 	int j;
 
 	mosquitto__free(config->clientid_prefixes);
-	mosquitto__free(config->config_file);
 	mosquitto__free(config->persistence_location);
 	mosquitto__free(config->persistence_file);
 	mosquitto__free(config->persistence_filepath);
@@ -362,7 +378,7 @@ static void print_usage(void)
 	printf("\nSee http://mosquitto.org/ for more information.\n\n");
 }
 
-int config__parse_args(struct mosquitto__config *config, int argc, char *argv[])
+int config__parse_args(struct mosquitto_db *db, struct mosquitto__config *config, int argc, char *argv[])
 {
 	int i;
 	int port_tmp;
@@ -370,13 +386,9 @@ int config__parse_args(struct mosquitto__config *config, int argc, char *argv[])
 	for(i=1; i<argc; i++){
 		if(!strcmp(argv[i], "-c") || !strcmp(argv[i], "--config-file")){
 			if(i<argc-1){
-				config->config_file = mosquitto__strdup(argv[i+1]);
-				if(!config->config_file){
-					log__printf(NULL, MOSQ_LOG_ERR, "Error: Out of memory.");
-					return MOSQ_ERR_NOMEM;
-				}
+				db->config_file = argv[i+1];
 
-				if(config__read(config, false)){
+				if(config__read(db, config, false)){
 					log__printf(NULL, MOSQ_LOG_ERR, "Error: Unable to open configuration file.");
 					return MOSQ_ERR_INVAL;
 				}
@@ -408,7 +420,7 @@ int config__parse_args(struct mosquitto__config *config, int argc, char *argv[])
 			}
 			i++;
 		}else if(!strcmp(argv[i], "-v") || !strcmp(argv[i], "--verbose")){
-			config->verbose = true;
+			db->verbose = true;
 		}else{
 			fprintf(stderr, "Error: Unknown option '%s'.\n",argv[i]);
 			print_usage();
@@ -495,19 +507,87 @@ int config__parse_args(struct mosquitto__config *config, int argc, char *argv[])
 	if(!config->user){
 		config->user = "mosquitto";
 	}
-	if(config->verbose){
+	if(db->verbose){
 		config->log_type = INT_MAX;
 	}
 	return config__check(config);
 }
 
-int config__read(struct mosquitto__config *config, bool reload)
+void config__copy(struct mosquitto__config *src, struct mosquitto__config *dest)
+{
+	mosquitto__free(dest->security_options.acl_file);
+	dest->security_options.acl_file = src->security_options.acl_file;
+
+	dest->security_options.allow_anonymous = src->security_options.allow_anonymous;
+	dest->security_options.allow_zero_length_clientid = src->security_options.allow_zero_length_clientid;
+
+	mosquitto__free(dest->security_options.auto_id_prefix);
+	dest->security_options.auto_id_prefix = src->security_options.auto_id_prefix;
+	dest->security_options.auto_id_prefix_len = src->security_options.auto_id_prefix_len;
+
+	mosquitto__free(dest->security_options.password_file);
+	dest->security_options.password_file = src->security_options.password_file;
+
+	mosquitto__free(dest->security_options.psk_file);
+	dest->security_options.psk_file = src->security_options.psk_file;
+
+
+	dest->allow_duplicate_messages = src->allow_duplicate_messages;
+
+
+	dest->autosave_interval = src->autosave_interval;
+	dest->autosave_on_changes = src->autosave_on_changes;
+
+	mosquitto__free(dest->clientid_prefixes);
+	dest->clientid_prefixes = src->clientid_prefixes;
+
+	dest->connection_messages = src->connection_messages;
+	dest->log_dest = src->log_dest;
+	dest->log_facility = src->log_facility;
+	dest->log_type = src->log_type;
+	dest->log_timestamp = src->log_timestamp;
+
+	mosquitto__free(dest->log_file);
+	dest->log_file = src->log_file;
+
+	dest->message_size_limit = src->message_size_limit;
+
+	dest->persistence = src->persistence;
+
+	mosquitto__free(dest->persistence_location);
+	dest->persistence_location = src->persistence_location;
+
+	mosquitto__free(dest->persistence_file);
+	dest->persistence_file = src->persistence_file;
+
+	mosquitto__free(dest->persistence_filepath);
+	dest->persistence_filepath = src->persistence_filepath;
+
+	dest->persistent_client_expiration = src->persistent_client_expiration;
+
+
+	dest->queue_qos0_messages = src->queue_qos0_messages;
+	dest->sys_interval = src->sys_interval;
+	dest->upgrade_outgoing_qos = src->upgrade_outgoing_qos;
+
+#ifdef WITH_WEBSOCKETS
+	dest->websockets_log_level = src->websockets_log_level;
+#endif
+}
+
+
+int config__read(struct mosquitto_db *db, struct mosquitto__config *config, bool reload)
 {
 	int rc = MOSQ_ERR_SUCCESS;
 	struct config_recurse cr;
 	int lineno = 0;
 	int len;
+	struct mosquitto__config config_reload;
 	int i;
+
+	if(reload){
+		memset(&config_reload, 0, sizeof(struct mosquitto__config));
+	}
 
 	cr.log_dest = MQTT3_LOG_NONE;
 	cr.log_dest_set = 0;
@@ -518,16 +598,24 @@ int config__read(struct mosquitto__config *config, bool reload)
 	cr.max_queued_bytes = 0;
 	cr.max_queued_messages = 100;
 
-	if(!config->config_file) return 0;
+	if(!db->config_file) return 0;
 
 	if(reload){
 		/* Re-initialise appropriate config vars to default for reload. */
-		config__init_reload(config);
+		config__init_reload(db, &config_reload);
+		config_reload.listeners = config->listeners;
+		config_reload.listener_count = config->listener_count;
+		rc = config__read_file(&config_reload, reload, db->config_file, &cr, 0, &lineno);
+	}else{
+		rc = config__read_file(config, reload, db->config_file, &cr, 0, &lineno);
 	}
-	rc = config__read_file(config, reload, config->config_file, &cr, 0, &lineno);
 	if(rc){
-		log__printf(NULL, MOSQ_LOG_ERR, "Error found at %s:%d.", config->config_file, lineno);
+		log__printf(NULL, MOSQ_LOG_ERR, "Error found at %s:%d.", db->config_file, lineno);
 		return rc;
+	}
+
+	if(reload){
+		config__copy(&config_reload, config);
 	}
 
 	/* If auth/access options are set and allow_anonymous not explicitly set, disallow anon. */
@@ -613,7 +701,7 @@ int config__read(struct mosquitto__config *config, bool reload)
 	if(cr.log_dest_set){
 		config->log_dest = cr.log_dest;
 	}
-	if(config->verbose){
+	if(db->verbose){
 		config->log_type = INT_MAX;
 	}else if(cr.log_type_set){
 		config->log_type = cr.log_type;
@@ -1210,6 +1298,10 @@ int config__read_file_core(struct mosquitto__config *config, bool reload, struct
 									cur_listener = &config->listeners[i];
 								}
 							}
+							if(!cur_listener){
+								log__printf(NULL, MOSQ_LOG_ERR, "Error: It is not currently possible to add/remove listeners when reloading the config file.");
+								return MOSQ_ERR_INVAL;
+							}
 						}else{
 							config->listener_count++;
 							config->listeners = mosquitto__realloc(config->listeners, sizeof(struct mosquitto__listener)*config->listener_count);
@@ -1428,10 +1520,18 @@ int config__read_file_core(struct mosquitto__config *config, bool reload, struct
 					}else{
 						log__printf(NULL, MOSQ_LOG_ERR, "Error: Empty max_queued_messages value in configuration.");
 					}
+				}else if(!strcmp(token, "memory_limit")){
+					ssize_t lim;
+					if(conf__parse_int(&token, "memory_limit", (int *)&lim, saveptr)) return MOSQ_ERR_INVAL;
+					if(lim < 0){
+						log__printf(NULL, MOSQ_LOG_ERR, "Error: Invalid memory_limit value (%ld).", lim);
+						return MOSQ_ERR_INVAL;
+					}
+					memory__set_limit(lim);
 				}else if(!strcmp(token, "message_size_limit")){
 					if(conf__parse_int(&token, "message_size_limit", (int *)&config->message_size_limit, saveptr)) return MOSQ_ERR_INVAL;
 					if(config->message_size_limit > MQTT_MAX_PAYLOAD){
-						log__printf(NULL, MOSQ_LOG_ERR, "Error: Invalid message_size_limit value (%d).", config->message_size_limit);
+						log__printf(NULL, MOSQ_LOG_ERR, "Error: Invalid message_size_limit value (%u).", config->message_size_limit);
 						return MOSQ_ERR_INVAL;
 					}
 				}else if(!strcmp(token, "mount_point")){
@@ -2043,7 +2143,6 @@ static int conf__parse_int(char **token, const char *name, int *value, char *sav
 
 static int conf__parse_string(char **token, const char *name, char **value, char *saveptr)
 {
-	int len;
 	*token = strtok_r(NULL, "", &saveptr);
 	if(*token){
 		if(*value){
@@ -2054,12 +2153,7 @@ static int conf__parse_string(char **token, const char *name, char **value, char
 		while((*token)[0] == ' ' || (*token)[0] == '\t'){
 			(*token)++;
 		}
-		len = strlen(*token);
-		while((*token)[len-1] == ' '){
-			(*token)[len-1] = '\0';
-			len--;
-		}
-		if(mosquitto_validate_utf8(*token, len)){
+		if(mosquitto_validate_utf8(*token, strlen(*token))){
 			log__printf(NULL, MOSQ_LOG_ERR, "Error: Malformed UTF-8 in configuration.");
 			return MOSQ_ERR_INVAL;
 		}
