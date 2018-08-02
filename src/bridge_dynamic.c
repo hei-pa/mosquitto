@@ -32,6 +32,8 @@ Contributor:
 #include "send_mosq.h"
 #include "util_mosq.h"
 
+extern struct mosquitto_db int_db;
+
 static int config__check(struct mosquitto__config *config);
 
 int bridge__dynamic_analyse(struct mosquitto_db *db, char *topic, void* payload, uint32_t payloadlen)
@@ -40,7 +42,7 @@ int bridge__dynamic_analyse(struct mosquitto_db *db, char *topic, void* payload,
 	int *index;
 
 	struct mosquitto__config config;
-	config__init(&config);
+	config__init(&int_db, &config);
 
 	index = (int*) mosquitto__malloc(sizeof(int));
 	*index = -1;
