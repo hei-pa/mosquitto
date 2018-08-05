@@ -118,7 +118,7 @@ int packet__queue(struct mosquitto *mosq, struct mosquitto__packet *packet)
 #ifdef WITH_BROKER
 #  ifdef WITH_WEBSOCKETS
 	if(mosq->wsi){
-		lws_callback_on_writable(mosq->ws_context, mosq->wsi);
+		lws_callback_on_writable(mosq->ws_context);
 		return 0;
 	}else{
 		return packet__write(mosq);

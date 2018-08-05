@@ -297,7 +297,7 @@ static int callback_mqtt(
 				return -1;
 			}
 			if(mosq->current_out_packet){
-				lws_callback_on_writable(mosq->ws_context, mosq->wsi);
+				lws_callback_on_writable(mosq->ws_context);
 			}
 			break;
 
@@ -380,7 +380,7 @@ static int callback_mqtt(
 					if(mosq->state != mosq_cs_disconnecting){
 						mosq->state = mosq_cs_disconnect_ws;
 					}
-					lws_callback_on_writable(mosq->ws_context, mosq->wsi);
+					lws_callback_on_writable(mosq->ws_context);
 				} else if (rc) {
 					do_disconnect(db, mosq);
 					return -1;
@@ -551,7 +551,7 @@ static int callback_http(
 				u->fptr = NULL;
 				return -1;
 			}
-			lws_callback_on_writable(context, wsi);
+			lws_callback_on_writable(wsi);
 			break;
 
 		case LWS_CALLBACK_HTTP_BODY:
@@ -590,7 +590,7 @@ static int callback_http(
 						}
 					}
 				}while(u->fptr && !lws_send_pipe_choked(wsi));
-				lws_callback_on_writable(context, wsi);
+				lws_callback_on_writable(wsi);
 			}else{
 				return -1;
 			}

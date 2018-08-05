@@ -162,7 +162,7 @@ int net__socket_close(struct mosquitto *mosq)
 		if(mosq->state != mosq_cs_disconnecting){
 			mosq->state = mosq_cs_disconnect_ws;
 		}
-		lws_callback_on_writable(mosq->ws_context, mosq->wsi);
+		lws_callback_on_writable(mosq->ws_context);
 	}else
 #endif
 	{

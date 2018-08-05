@@ -587,7 +587,7 @@ void do_disconnect(struct mosquitto_db *db, struct mosquitto *context)
 			context->state = mosq_cs_disconnect_ws;
 		}
 		if(context->wsi){
-			lws_callback_on_writable(context->ws_context, context->wsi);
+			lws_callback_on_writable(context->ws_context);
 		}
 		if(context->sock != INVALID_SOCKET){
 			HASH_DELETE(hh_sock, db->contexts_by_sock, context);
