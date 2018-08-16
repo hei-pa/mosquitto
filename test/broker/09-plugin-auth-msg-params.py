@@ -1,7 +1,6 @@
 #!/usr/bin/env python
 
-# Test whether a retained PUBLISH to a topic with QoS 0 is sent with subscriber QoS
-# when upgrade_outgoing_qos is true
+# Test whether message parameters are passed to the plugin acl check function.
 
 import inspect, os, sys
 # From http://stackoverflow.com/questions/279237/python-import-a-module-from-a-folder
@@ -14,33 +13,38 @@ import mosq_test
 def write_config(filename, port):
     with open(filename, 'w') as f:
         f.write("port %d\n" % (port))
-        f.write("upgrade_outgoing_qos true\n")
+        f.write("auth_plugin c/auth_plugin_msg_params.so\n")
+        f.write("allow_anonymous true\n")
 
 port = mosq_test.get_port()
 conf_file = os.path.basename(__file__).replace('.py', '.conf')
 write_config(conf_file, port)
 
 rc = 1
-keepalive = 60
-mid = 16
-connect_packet = mosq_test.gen_connect("retain-qos0-test", keepalive=keepalive)
+keepalive = 10
+connect_packet = mosq_test.gen_connect("msg-param-test", keepalive=keepalive)
 connack_packet = mosq_test.gen_connack(rc=0)
 
-publish_packet = mosq_test.gen_publish("retain/qos0/test", qos=0, payload="retained message", retain=True)
-subscribe_packet = mosq_test.gen_subscribe(mid, "retain/qos0/test", 1)
+mid = 2
+subscribe_packet = mosq_test.gen_subscribe(mid, "param/topic", 1)
 suback_packet = mosq_test.gen_suback(mid, 1)
 
-publish_packet2 = mosq_test.gen_publish("retain/qos0/test", mid=1, qos=1, payload="retained message", retain=True)
+mid = 3
+publish_packet = mosq_test.gen_publish(topic="param/topic", qos=1, payload="payload contents", retain=1, mid=mid)
+puback_packet = mosq_test.gen_puback(mid)
+
+mid = 1
+publish_packet_recv = mosq_test.gen_publish(topic="param/topic", qos=1, payload="payload contents", retain=0, mid=mid)
+
 
 broker = mosq_test.start_broker(filename=os.path.basename(__file__), use_conf=True, port=port)
 
 try:
-    sock = mosq_test.do_client_connect(connect_packet, connack_packet, port=port)
-    sock.send(publish_packet)
-
+    sock = mosq_test.do_client_connect(connect_packet, connack_packet, timeout=20, port=port)
     mosq_test.do_send_receive(sock, subscribe_packet, suback_packet, "suback")
+    mosq_test.do_send_receive(sock, publish_packet, puback_packet, "puback")
 
-    if mosq_test.expect_packet(sock, "publish", publish_packet2):
+    if mosq_test.expect_packet(sock, "publish receive", publish_packet_recv):
         rc = 0
 
     sock.close()
@@ -51,6 +55,7 @@ finally:
     (stdo, stde) = broker.communicate()
     if rc:
         print(stde)
+
 
 exit(rc)
 

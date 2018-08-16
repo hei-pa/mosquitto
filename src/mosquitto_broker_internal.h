@@ -33,11 +33,14 @@ Contributors:
 #    define libwebsocket_get_socket_fd(A) lws_get_socket_fd((A))
 #    define libwebsockets_return_http_status(A, B, C, D) lws_return_http_status((B), (C), (D))
 #    define libwebsockets_get_protocol(A) lws_get_protocol((A))
-
 #    define libwebsocket_context lws_context
 #    define libwebsocket_protocols lws_protocols
 #    define libwebsocket_callback_reasons lws_callback_reasons
 #    define libwebsocket lws
+#  else
+#    define lws_pollfd pollfd
+#    define lws_service_fd(A, B) libwebsocket_service_fd((A), (B))
+#    define lws_pollargs libwebsocket_pollargs
 #  endif
 #endif
 
@@ -199,7 +202,7 @@ struct mosquitto__security_options {
 	char *acl_file;
 	struct mosquitto__auth_plugin_config *auth_plugin_configs;
 	int auth_plugin_config_count;
-	char allow_anonymous;
+	int8_t allow_anonymous;
 	bool allow_zero_length_clientid;
 	char *auto_id_prefix;
 	int auto_id_prefix_len;
@@ -565,7 +568,7 @@ void sys_tree__update(struct mosquitto_db *db, int interval, time_t start_time);
  * Subscription functions
  * ============================================================ */
 int sub__add(struct mosquitto_db *db, struct mosquitto *context, const char *sub, int qos, struct mosquitto__subhier **root);
-struct mosquitto__subhier *sub__add_hier_entry(struct mosquitto__subhier **parent, const char *topic, size_t len);
+struct mosquitto__subhier *sub__add_hier_entry(struct mosquitto__subhier *parent, struct mosquitto__subhier **sibling, const char *topic, size_t len);
 int sub__remove(struct mosquitto_db *db, struct mosquitto *context, const char *sub, struct mosquitto__subhier *root);
 void sub__tree_print(struct mosquitto__subhier *root, int level);
 int sub__clean_session(struct mosquitto_db *db, struct mosquitto *context);
@@ -614,7 +617,7 @@ int mosquitto_security_module_cleanup(struct mosquitto_db *db);
 int mosquitto_security_init(struct mosquitto_db *db, bool reload);
 int mosquitto_security_apply(struct mosquitto_db *db);
 int mosquitto_security_cleanup(struct mosquitto_db *db, bool reload);
-int mosquitto_acl_check(struct mosquitto_db *db, struct mosquitto *context, const char *topic, int access);
+int mosquitto_acl_check(struct mosquitto_db *db, struct mosquitto *context, const char *topic, long payloadlen, void* payload, int qos, bool retain, int access);
 int mosquitto_unpwd_check(struct mosquitto_db *db, struct mosquitto *context, const char *username, const char *password);
 int mosquitto_psk_key_get(struct mosquitto_db *db, struct mosquitto *context, const char *hint, const char *identity, char *key, int max_key_len);
 

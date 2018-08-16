@@ -98,9 +98,9 @@ if (CMAKE_SYSTEM_NAME STREQUAL Linux)
 	endif (${WITH_SYSTEMD} STREQUAL ON)
 endif (CMAKE_SYSTEM_NAME STREQUAL Linux)
 
-option(WITH_WEBSOCKETS
-	"Include websockets support?" OFF)
-if (${WITH_WEBSOCKETS} STREQUAL ON)
+option(WITH_WEBSOCKETS "Include websockets support?" OFF)
+option(STATIC_WEBSOCKETS "Use the static libwebsockets library?" OFF)
+if (${WITH_WEBSOCKETS} STREQUAL ON )
 	add_definitions("-DWITH_WEBSOCKETS")
 endif (${WITH_WEBSOCKETS} STREQUAL ON)
 
@@ -109,8 +109,6 @@ if (WIN32 OR CYGWIN)
 endif (WIN32 OR CYGWIN)
 
 add_definitions (-DWITH_BROKER)
-
-add_executable(mosquitto ${MOSQ_SRCS})
 
 set (MOSQ_LIBS ${MOSQ_LIBS} ${OPENSSL_LIBRARIES})
 
@@ -141,7 +139,15 @@ if (WIN32)
 endif (WIN32)
 
 if (${WITH_WEBSOCKETS} STREQUAL ON)
-	set (MOSQ_LIBS ${MOSQ_LIBS} websockets)
+	if (${STATIC_WEBSOCKETS} STREQUAL ON)
+		set (MOSQ_LIBS ${MOSQ_LIBS} websockets_static)
+		if (WIN32)
+			set (MOSQ_LIBS ${MOSQ_LIBS} iphlpapi)
+			link_directories(${mosquitto_SOURCE_DIR})
+		endif (WIN32)
+	else (${STATIC_WEBSOCKETS} STREQUAL ON)
+		set (MOSQ_LIBS ${MOSQ_LIBS} websockets)
+	endif (${STATIC_WEBSOCKETS} STREQUAL ON)
 endif (${WITH_WEBSOCKETS} STREQUAL ON)
 
 # Simple detect libuuid
@@ -153,6 +159,7 @@ if(NOT APPLE)
 	endif (UUID_HEADER)
 endif(NOT APPLE)
 
+add_executable(mosquitto ${MOSQ_SRCS})
 target_link_libraries(mosquitto ${MOSQ_LIBS})
 
 if (UNIX)

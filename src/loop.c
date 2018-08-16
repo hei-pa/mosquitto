@@ -15,9 +15,7 @@ Contributors:
    Tatsuzo Osawa - Add epoll.
 */
 
-#define _GNU_SOURCE
-
-#include <config.h>
+#include "config.h"
 
 #include <assert.h>
 #ifndef WIN32
@@ -243,7 +241,7 @@ int mosquitto_main_loop(struct mosquitto_db *db, mosq_sock_t *listensock, int li
 				/* Local bridges never time out in this fashion. */
 				if(!(context->keepalive)
 						|| context->bridge
-						|| now - context->last_msg_in < (time_t)(context->keepalive)*3/2){
+						|| now - context->last_msg_in <= (time_t)(context->keepalive)*3/2){
 
 					if(db__message_write(db, context) == MOSQ_ERR_SUCCESS){
 #ifdef WITH_EPOLL
@@ -679,7 +677,11 @@ static void loop_handle_reads_writes(struct mosquitto_db *db, struct pollfd *pol
 			wspoll.events = pollfds[context->pollfd_index].events;
 			wspoll.revents = pollfds[context->pollfd_index].revents;
 #endif
+#ifdef LWS_LIBRARY_VERSION_NUMBER
 			lws_service_fd(lws_get_context(context->wsi), &wspoll);
+#else
+			lws_service_fd(context->ws_context, &wspoll);
+#endif
 			continue;
 		}
 #endif

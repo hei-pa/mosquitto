@@ -36,15 +36,12 @@ Contributors:
 #include <tcpd.h>
 #endif
 
-#ifdef __FreeBSD__
+#ifdef HAVE_NETINET_IN_H
 #  include <netinet/in.h>
-#  include <sys/socket.h>
 #endif
 
 #ifdef __QNX__
-#include <netinet/in.h>
 #include <net/netbyte.h>
-#include <sys/socket.h>
 #endif
 
 #include "mosquitto_broker_internal.h"
@@ -104,7 +101,7 @@ int net__socket_accept(struct mosquitto_db *db, mosq_sock_t listensock)
 
 	G_SOCKET_CONNECTIONS_INC();
 
-	if(net__socket_nonblock(new_sock)){
+	if(net__socket_nonblock(&new_sock)){
 		return INVALID_SOCKET;
 	}
 
@@ -114,7 +111,7 @@ int net__socket_accept(struct mosquitto_db *db, mosq_sock_t listensock)
 	fromhost(&wrap_req);
 	if(!hosts_access(&wrap_req)){
 		/* Access is denied */
-		if(!mosquitto__socket_get_address(new_sock, address, 1024)){
+		if(!net__socket_get_address(new_sock, address, 1024)){
 			log__printf(NULL, MOSQ_LOG_NOTICE, "Client connection from %s denied access by tcpd.", address);
 		}
 		COMPAT_CLOSE(new_sock);
@@ -353,7 +350,7 @@ int net__socket_listen(struct mosquitto__listener *listener)
 
 	snprintf(service, 10, "%d", listener->port);
 	memset(&hints, 0, sizeof(struct addrinfo));
-	hints.ai_family = PF_UNSPEC;
+	hints.ai_family = AF_UNSPEC;
 	hints.ai_flags = AI_PASSIVE;
 	hints.ai_socktype = SOCK_STREAM;
 
@@ -391,7 +388,7 @@ int net__socket_listen(struct mosquitto__listener *listener)
 		ss_opt = 1;
 		setsockopt(sock, IPPROTO_IPV6, IPV6_V6ONLY, &ss_opt, sizeof(ss_opt));
 
-		if(net__socket_nonblock(sock)){
+		if(net__socket_nonblock(&sock)){
 			return 1;
 		}
 
@@ -427,6 +424,7 @@ int net__socket_listen(struct mosquitto__listener *listener)
 				}else{
 					log__printf(NULL, MOSQ_LOG_ERR, "Error: Unable to load CA certificates. Check capath \"%s\".", listener->capath);
 				}
+				net__print_error(MOSQ_LOG_ERR, "Error: %s");
 				COMPAT_CLOSE(sock);
 				return 1;
 			}
@@ -439,18 +437,21 @@ int net__socket_listen(struct mosquitto__listener *listener)
 			rc = SSL_CTX_use_certificate_chain_file(listener->ssl_ctx, listener->certfile);
 			if(rc != 1){
 				log__printf(NULL, MOSQ_LOG_ERR, "Error: Unable to load server certificate \"%s\". Check certfile.", listener->certfile);
+				net__print_error(MOSQ_LOG_ERR, "Error: %s");
 				COMPAT_CLOSE(sock);
 				return 1;
 			}
 			rc = SSL_CTX_use_PrivateKey_file(listener->ssl_ctx, listener->keyfile, SSL_FILETYPE_PEM);
 			if(rc != 1){
 				log__printf(NULL, MOSQ_LOG_ERR, "Error: Unable to load server key file \"%s\". Check keyfile.", listener->keyfile);
+				net__print_error(MOSQ_LOG_ERR, "Error: %s");
 				COMPAT_CLOSE(sock);
 				return 1;
 			}
 			rc = SSL_CTX_check_private_key(listener->ssl_ctx);
 			if(rc != 1){
 				log__printf(NULL, MOSQ_LOG_ERR, "Error: Server certificate/key are inconsistent.");
+				net__print_error(MOSQ_LOG_ERR, "Error: %s");
 				COMPAT_CLOSE(sock);
 				return 1;
 			}
@@ -459,6 +460,7 @@ int net__socket_listen(struct mosquitto__listener *listener)
 				store = SSL_CTX_get_cert_store(listener->ssl_ctx);
 				if(!store){
 					log__printf(NULL, MOSQ_LOG_ERR, "Error: Unable to obtain TLS store.");
+					net__print_error(MOSQ_LOG_ERR, "Error: %s");
 					COMPAT_CLOSE(sock);
 					return 1;
 				}
@@ -466,6 +468,7 @@ int net__socket_listen(struct mosquitto__listener *listener)
 				rc = X509_load_crl_file(lookup, listener->crlfile, X509_FILETYPE_PEM);
 				if(rc != 1){
 					log__printf(NULL, MOSQ_LOG_ERR, "Error: Unable to load certificate revocation file \"%s\". Check crlfile.", listener->crlfile);
+					net__print_error(MOSQ_LOG_ERR, "Error: %s");
 					COMPAT_CLOSE(sock);
 					return 1;
 				}
@@ -490,6 +493,7 @@ int net__socket_listen(struct mosquitto__listener *listener)
 				rc = SSL_CTX_use_psk_identity_hint(listener->ssl_ctx, listener->psk_hint);
 				if(rc == 0){
 					log__printf(NULL, MOSQ_LOG_ERR, "Error: Unable to set TLS PSK hint.");
+					net__print_error(MOSQ_LOG_ERR, "Error: %s");
 					COMPAT_CLOSE(sock);
 					return 1;
 				}
