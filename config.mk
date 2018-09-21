@@ -92,6 +92,9 @@ WITH_STATIC_LIBRARIES:=no
 # Build with epoll support.
 WITH_EPOLL:=yes
 
+# Build with bundled uthash.h
+WITH_BUNDLED_DEPS:=yes
+
 # =============================================================================
 # End of user configuration
 # =============================================================================
@@ -99,7 +102,7 @@ WITH_EPOLL:=yes
 
 # Also bump lib/mosquitto.h, CMakeLists.txt,
 # installer/mosquitto.nsi, installer/mosquitto64.nsi
-VERSION=1.5.1
+VERSION=1.5.2
 
 # Client library SO version. Bump if incompatible API/ABI changes are made.
 SOVERSION=1
@@ -289,4 +292,8 @@ ifeq ($(WITH_EPOLL),yes)
 	ifeq ($(UNAME),Linux)
 		BROKER_CFLAGS:=$(BROKER_CFLAGS) -DWITH_EPOLL
 	endif
+endif
+
+ifeq ($(WITH_BUNDLED_DEPS),yes)
+	BROKER_CFLAGS:=$(BROKER_CFLAGS) -Ideps
 endif
