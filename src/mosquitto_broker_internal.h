@@ -252,6 +252,7 @@ struct mosquitto__config {
 	int auto_id_prefix_len;
 	int autosave_interval;
 	bool autosave_on_changes;
+	bool check_retain_source;
 	char *clientid_prefixes;
 	bool connection_messages;
 	bool daemon;
@@ -316,6 +317,8 @@ struct mosquitto_msg_store{
 	struct mosquitto_msg_store *prev;
 	dbid_t db_id;
 	char *source_id;
+	char *source_username;
+	struct mosquitto__listener *source_listener;
 	char **dest_ids;
 	int dest_id_count;
 	int ref_count;
@@ -549,15 +552,15 @@ int persist__restore(struct mosquitto_db *db);
 void db__limits_set(int inflight, unsigned long inflight_bytes, int queued, unsigned long queued_bytes);
 /* Return the number of in-flight messages in count. */
 int db__message_count(int *count);
-int db__message_delete(struct mosquitto_db *db, struct mosquitto *context, uint16_t mid, enum mosquitto_msg_direction dir);
+int db__message_delete(struct mosquitto_db *db, struct mosquitto *context, uint16_t mid, enum mosquitto_msg_direction dir, int qos);
 int db__message_insert(struct mosquitto_db *db, struct mosquitto *context, uint16_t mid, enum mosquitto_msg_direction dir, int qos, bool retain, struct mosquitto_msg_store *stored);
 int db__message_release(struct mosquitto_db *db, struct mosquitto *context, uint16_t mid, enum mosquitto_msg_direction dir);
-int db__message_update(struct mosquitto *context, uint16_t mid, enum mosquitto_msg_direction dir, enum mosquitto_msg_state state);
+int db__message_update(struct mosquitto *context, uint16_t mid, enum mosquitto_msg_direction dir, enum mosquitto_msg_state state, int qos);
 int db__message_write(struct mosquitto_db *db, struct mosquitto *context);
 void db__message_dequeue_first(struct mosquitto *context);
 int db__messages_delete(struct mosquitto_db *db, struct mosquitto *context);
 int db__messages_easy_queue(struct mosquitto_db *db, struct mosquitto *context, const char *topic, int qos, uint32_t payloadlen, const void *payload, int retain);
-int db__message_store(struct mosquitto_db *db, const char *source, uint16_t source_mid, char *topic, int qos, uint32_t payloadlen, mosquitto__payload_uhpa *payload, int retain, struct mosquitto_msg_store **stored, dbid_t store_id);
+int db__message_store(struct mosquitto_db *db, const struct mosquitto *source, uint16_t source_mid, char *topic, int qos, uint32_t payloadlen, mosquitto__payload_uhpa *payload, int retain, struct mosquitto_msg_store **stored, dbid_t store_id);
 int db__message_store_find(struct mosquitto *context, uint16_t mid, struct mosquitto_msg_store **stored);
 void db__msg_store_add(struct mosquitto_db *db, struct mosquitto_msg_store *store);
 void db__msg_store_remove(struct mosquitto_db *db, struct mosquitto_msg_store *store);
@@ -588,6 +591,7 @@ void context__disconnect(struct mosquitto_db *db, struct mosquitto *context);
 void context__add_to_disused(struct mosquitto_db *db, struct mosquitto *context);
 void context__free_disused(struct mosquitto_db *db);
 void context__send_will(struct mosquitto_db *db, struct mosquitto *context);
+void context__remove_from_by_id(struct mosquitto_db *db, struct mosquitto *context);
 
 /* ============================================================
  * Logging functions
@@ -616,6 +620,7 @@ int bridge__dynamic_parse_payload_del(void* payload, struct mosquitto_db *db, in
 /* ============================================================
  * Security related functions
  * ============================================================ */
+int acl__find_acls(struct mosquitto_db *db, struct mosquitto *context);
 int mosquitto_security_module_init(struct mosquitto_db *db);
 int mosquitto_security_module_cleanup(struct mosquitto_db *db);
 
