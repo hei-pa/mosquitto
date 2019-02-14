@@ -143,7 +143,6 @@ int bridge__del(struct mosquitto_db *db, int index)
 int bridge__connect_step1(struct mosquitto_db *db, struct mosquitto *context)
 {
 	int rc;
-	int i;
 	char *notification_topic;
 	int notification_topic_len;
 	uint8_t notification_payload;
