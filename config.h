@@ -17,6 +17,8 @@
 
 #define _GNU_SOURCE
 
+#define OPENSSL_LOAD_CONF
+
 /* ============================================================
  * Compatibility defines
  * ============================================================ */
@@ -36,5 +38,13 @@
 
 #define uthash_malloc(sz) mosquitto__malloc(sz)
 #define uthash_free(ptr,sz) mosquitto__free(ptr)
+
+
+#ifdef WITH_TLS
+#  include <openssl/opensslconf.h>
+#  if defined(WITH_TLS_PSK) && !defined(OPENSSL_NO_PSK)
+#    define FINAL_WITH_TLS_PSK
+#  endif
+#endif
 
 #endif

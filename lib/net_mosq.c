@@ -64,13 +64,49 @@ Contributors:
 
 #include "logging_mosq.h"
 #include "memory_mosq.h"
-#include "mqtt3_protocol.h"
+#include "mqtt_protocol.h"
 #include "net_mosq.h"
 #include "time_mosq.h"
 #include "util_mosq.h"
 
 #ifdef WITH_TLS
 int tls_ex_index_mosq = -1;
+UI_METHOD *_ui_method = NULL;
+
+/* Functions taken from OpenSSL s_server/s_client */
+static int ui_open(UI *ui)
+{
+	return UI_method_get_opener(UI_OpenSSL())(ui);
+}
+
+static int ui_read(UI *ui, UI_STRING *uis)
+{
+	return UI_method_get_reader(UI_OpenSSL())(ui, uis);
+}
+
+static int ui_write(UI *ui, UI_STRING *uis)
+{
+	return UI_method_get_writer(UI_OpenSSL())(ui, uis);
+}
+
+static int ui_close(UI *ui)
+{
+	return UI_method_get_closer(UI_OpenSSL())(ui);
+}
+
+static void setup_ui_method(void)
+{
+	_ui_method = UI_create_method("OpenSSL application user interface");
+	UI_method_set_opener(_ui_method, ui_open);
+	UI_method_set_reader(_ui_method, ui_read);
+	UI_method_set_writer(_ui_method, ui_write);
+	UI_method_set_closer(_ui_method, ui_close);
+}
+
+UI_METHOD *net__get_ui_method(void)
+{
+	return _ui_method;
+}
 #endif
 
 int net__init(void)
@@ -87,9 +123,17 @@ int net__init(void)
 #endif
 
 #ifdef WITH_TLS
+#  if OPENSSL_VERSION_NUMBER < 0x10100000L || OPENSSL_API_COMPAT < 0x10100000L
 	SSL_load_error_strings();
 	SSL_library_init();
 	OpenSSL_add_all_algorithms();
+	ENGINE_load_builtin_engines();
+	setup_ui_method();
+#  else
+	OPENSSL_init_crypto(OPENSSL_INIT_ADD_ALL_CIPHERS \
+			| OPENSSL_INIT_ADD_ALL_DIGESTS \
+			| OPENSSL_INIT_LOAD_CONFIG, NULL);
+#  endif
 	if(tls_ex_index_mosq == -1){
 		tls_ex_index_mosq = SSL_get_ex_new_index(0, "client context", NULL, NULL, NULL);
 	}
@@ -100,16 +144,18 @@ int net__init(void)
 void net__cleanup(void)
 {
 #ifdef WITH_TLS
-	#if OPENSSL_VERSION_NUMBER < 0x10100000L
-		ERR_remove_state(0);
-	#endif
-	#ifndef OPENSSL_NO_ENGINE
-		ENGINE_cleanup();
-	#endif
-	CONF_modules_unload(1);
-	ERR_free_strings();
-	EVP_cleanup();
+#  if OPENSSL_VERSION_NUMBER < 0x10100000L || OPENSSL_API_COMPAT < 0x10100000L
 	CRYPTO_cleanup_all_ex_data();
+	ERR_free_strings();
+	ERR_remove_state(0);
+	EVP_cleanup();
+
+#    if !defined(OPENSSL_NO_ENGINE)
+	ENGINE_cleanup();
+#    endif
+#  endif
+
+	CONF_modules_unload(1);
 #endif
 
 #ifdef WITH_SRV
@@ -145,10 +191,6 @@ int net__socket_close(struct mosquitto *mosq)
 			SSL_free(mosq->ssl);
 			mosq->ssl = NULL;
 		}
-		if(mosq->ssl_ctx){
-			SSL_CTX_free(mosq->ssl_ctx);
-			mosq->ssl_ctx = NULL;
-		}
 	}
 #endif
 
@@ -162,7 +204,7 @@ int net__socket_close(struct mosquitto *mosq)
 	}else
 #endif
 	{
-		if((int)mosq->sock >= 0){
+		if(mosq->sock != INVALID_SOCKET){
 #ifdef WITH_BROKER
 			HASH_DELETE(hh_sock, db->contexts_by_sock, mosq);
 #endif
@@ -174,8 +216,6 @@ int net__socket_close(struct mosquitto *mosq)
 #ifdef WITH_BROKER
 	if(mosq->listener){
 		mosq->listener->client_count--;
-		assert(mosq->listener->client_count >= 0);
-		mosq->listener = NULL;
 	}
 #endif
 
@@ -183,7 +223,7 @@ int net__socket_close(struct mosquitto *mosq)
 }
 
 
-#ifdef WITH_TLS_PSK
+#ifdef FINAL_WITH_TLS_PSK
 static unsigned int psk_client_callback(SSL *ssl, const char *hint,
 		char *identity, unsigned int max_identity_len,
 		unsigned char *psk, unsigned int max_psk_len)
@@ -208,21 +248,39 @@ int net__try_connect_step1(struct mosquitto *mosq, const char *host)
 {
 	int s;
 	void *sevp = NULL;
+	struct addrinfo *hints;
 
 	if(mosq->adns){
+		gai_cancel(mosq->adns);
+		mosquitto__free((struct addrinfo *)mosq->adns->ar_request);
 		mosquitto__free(mosq->adns);
 	}
 	mosq->adns = mosquitto__calloc(1, sizeof(struct gaicb));
 	if(!mosq->adns){
 		return MOSQ_ERR_NOMEM;
 	}
+
+	hints = mosquitto__calloc(1, sizeof(struct addrinfo));
+	if(!hints){
+		mosquitto__free(mosq->adns);
+		mosq->adns = NULL;
+		return MOSQ_ERR_NOMEM;
+	}
+
+	hints->ai_family = AF_UNSPEC;
+	hints->ai_socktype = SOCK_STREAM;
+
 	mosq->adns->ar_name = host;
+	mosq->adns->ar_request = hints;
 
 	s = getaddrinfo_a(GAI_NOWAIT, &mosq->adns, 1, sevp);
 	if(s){
 		errno = s;
-		mosquitto__free(mosq->adns);
-		mosq->adns = NULL;
+		if(mosq->adns){
+			mosquitto__free((struct addrinfo *)mosq->adns->ar_request);
+			mosquitto__free(mosq->adns);
+			mosq->adns = NULL;
+		}
 		return MOSQ_ERR_EAI;
 	}
 
@@ -278,6 +336,7 @@ int net__try_connect_step2(struct mosquitto *mosq, uint16_t port, mosq_sock_t *s
 	freeaddrinfo(mosq->adns->ar_result);
 	mosq->adns->ar_result = NULL;
 
+	mosquitto__free((struct addrinfo *)mosq->adns->ar_request);
 	mosquitto__free(mosq->adns);
 	mosq->adns = NULL;
 
@@ -440,6 +499,7 @@ int net__socket_connect_tls(struct mosquitto *mosq)
 static int net__init_ssl_ctx(struct mosquitto *mosq)
 {
 	int ret;
+	ENGINE *engine = NULL;
 
 	if(mosq->ssl_ctx){
 		if(!mosq->ssl_ctx_defaults){
@@ -493,10 +553,28 @@ static int net__init_ssl_ctx(struct mosquitto *mosq)
 			SSL_CTX_set_mode(mosq->ssl_ctx, SSL_MODE_RELEASE_BUFFERS);
 #endif
 
+		if(mosq->tls_engine){
+			engine = ENGINE_by_id(mosq->tls_engine);
+			if(!engine){
+				log__printf(mosq, MOSQ_LOG_ERR, "Error loading %s engine\n", mosq->tls_engine);
+				COMPAT_CLOSE(mosq->sock);
+				return MOSQ_ERR_TLS;
+			}
+			if(!ENGINE_init(engine)){
+				log__printf(mosq, MOSQ_LOG_ERR, "Failed engine initialisation\n");
+				ENGINE_free(engine);
+				COMPAT_CLOSE(mosq->sock);
+				return MOSQ_ERR_TLS;
+			}
+			ENGINE_set_default(engine, ENGINE_METHOD_ALL);
+			ENGINE_free(engine); /* release the structural reference from ENGINE_by_id() */
+		}
+
 		if(mosq->tls_ciphers){
 			ret = SSL_CTX_set_cipher_list(mosq->ssl_ctx, mosq->tls_ciphers);
 			if(ret == 0){
 				log__printf(mosq, MOSQ_LOG_ERR, "Error: Unable to set TLS ciphers. Check cipher list \"%s\".", mosq->tls_ciphers);
+				ENGINE_FINISH(engine);
 				COMPAT_CLOSE(mosq->sock);
 				mosq->sock = INVALID_SOCKET;
 				net__print_ssl_error(mosq);
@@ -523,6 +601,7 @@ static int net__init_ssl_ctx(struct mosquitto *mosq)
 					log__printf(mosq, MOSQ_LOG_ERR, "Error: Unable to load CA certificates, check capath \"%s\".", mosq->tls_capath);
 				}
 #endif
+				ENGINE_FINISH(engine);
 				COMPAT_CLOSE(mosq->sock);
 				mosq->sock = INVALID_SOCKET;
 				net__print_ssl_error(mosq);
@@ -547,6 +626,7 @@ static int net__init_ssl_ctx(struct mosquitto *mosq)
 #else
 					log__printf(mosq, MOSQ_LOG_ERR, "Error: Unable to load client certificate \"%s\".", mosq->tls_certfile);
 #endif
+					ENGINE_FINISH(engine);
 					COMPAT_CLOSE(mosq->sock);
 					mosq->sock = INVALID_SOCKET;
 					net__print_ssl_error(mosq);
@@ -554,28 +634,66 @@ static int net__init_ssl_ctx(struct mosquitto *mosq)
 				}
 			}
 			if(mosq->tls_keyfile){
-				ret = SSL_CTX_use_PrivateKey_file(mosq->ssl_ctx, mosq->tls_keyfile, SSL_FILETYPE_PEM);
-				if(ret != 1){
+				if(mosq->tls_keyform == mosq_k_engine){
+					UI_METHOD *ui_method = net__get_ui_method();
+					if(mosq->tls_engine_kpass_sha1){
+						if(!ENGINE_ctrl_cmd(engine, ENGINE_SECRET_MODE, ENGINE_SECRET_MODE_SHA, NULL, NULL, 0)){
+							log__printf(mosq, MOSQ_LOG_ERR, "Error: Unable to set engine secret mode sha1");
+							ENGINE_FINISH(engine);
+							COMPAT_CLOSE(mosq->sock);
+							net__print_ssl_error(mosq);
+							return MOSQ_ERR_TLS;
+						}
+						if(!ENGINE_ctrl_cmd(engine, ENGINE_PIN, 0, mosq->tls_engine_kpass_sha1, NULL, 0)){
+							log__printf(mosq, MOSQ_LOG_ERR, "Error: Unable to set engine pin");
+							ENGINE_FINISH(engine);
+							COMPAT_CLOSE(mosq->sock);
+							net__print_ssl_error(mosq);
+							return MOSQ_ERR_TLS;
+						}
+						ui_method = NULL;
+					}
+					EVP_PKEY *pkey = ENGINE_load_private_key(engine, mosq->tls_keyfile, ui_method, NULL);
+					if(!pkey){
+						log__printf(mosq, MOSQ_LOG_ERR, "Error: Unable to load engine private key file \"%s\".", mosq->tls_keyfile);
+						ENGINE_FINISH(engine);
+						COMPAT_CLOSE(mosq->sock);
+						net__print_ssl_error(mosq);
+						return MOSQ_ERR_TLS;
+					}
+					if(SSL_CTX_use_PrivateKey(mosq->ssl_ctx, pkey) <= 0){
+						log__printf(mosq, MOSQ_LOG_ERR, "Error: Unable to use engine private key file \"%s\".", mosq->tls_keyfile);
+						ENGINE_FINISH(engine);
+						COMPAT_CLOSE(mosq->sock);
+						net__print_ssl_error(mosq);
+						return MOSQ_ERR_TLS;
+					}
+				}else{
+					ret = SSL_CTX_use_PrivateKey_file(mosq->ssl_ctx, mosq->tls_keyfile, SSL_FILETYPE_PEM);
+					if(ret != 1){
 #ifdef WITH_BROKER
-					log__printf(mosq, MOSQ_LOG_ERR, "Error: Unable to load client key file, check bridge_keyfile \"%s\".", mosq->tls_keyfile);
+						log__printf(mosq, MOSQ_LOG_ERR, "Error: Unable to load client key file, check bridge_keyfile \"%s\".", mosq->tls_keyfile);
 #else
-					log__printf(mosq, MOSQ_LOG_ERR, "Error: Unable to load client key file \"%s\".", mosq->tls_keyfile);
+						log__printf(mosq, MOSQ_LOG_ERR, "Error: Unable to load client key file \"%s\".", mosq->tls_keyfile);
 #endif
-					COMPAT_CLOSE(mosq->sock);
-					mosq->sock = INVALID_SOCKET;
-					net__print_ssl_error(mosq);
-					return MOSQ_ERR_TLS;
+						ENGINE_FINISH(engine);
+						COMPAT_CLOSE(mosq->sock);
+						mosq->sock = INVALID_SOCKET;
+						net__print_ssl_error(mosq);
+						return MOSQ_ERR_TLS;
+					}
 				}
 				ret = SSL_CTX_check_private_key(mosq->ssl_ctx);
 				if(ret != 1){
 					log__printf(mosq, MOSQ_LOG_ERR, "Error: Client certificate/key are inconsistent.");
+					ENGINE_FINISH(engine);
 					COMPAT_CLOSE(mosq->sock);
 					mosq->sock = INVALID_SOCKET;
 					net__print_ssl_error(mosq);
 					return MOSQ_ERR_TLS;
 				}
 			}
-#ifdef WITH_TLS_PSK
+#ifdef FINAL_WITH_TLS_PSK
 		}else if(mosq->tls_psk){
 			SSL_CTX_set_psk_client_callback(mosq->ssl_ctx, psk_client_callback);
 #endif
@@ -587,7 +705,7 @@ static int net__init_ssl_ctx(struct mosquitto *mosq)
 #endif
 
 
-int net__socket_connect_step3(struct mosquitto *mosq, const char *host, uint16_t port, const char *bind_address, bool blocking)
+int net__socket_connect_step3(struct mosquitto *mosq, const char *host)
 {
 #ifdef WITH_TLS
 	BIO *bio;
@@ -648,8 +766,13 @@ int net__socket_connect(struct mosquitto *mosq, const char *host, uint16_t port,
 
 	mosq->sock = sock;
 
-	rc = net__socket_connect_step3(mosq, host, port, bind_address, blocking);
-	if(rc) return rc;
+#if defined(WITH_SOCKS) && !defined(WITH_BROKER)
+	if(!mosq->socks5_host)
+#endif
+	{
+		rc = net__socket_connect_step3(mosq, host);
+		if(rc) return rc;
+	}
 
 	return MOSQ_ERR_SUCCESS;
 }

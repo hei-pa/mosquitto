@@ -61,7 +61,7 @@ int net__socket_close(struct mosquitto *mosq);
 int net__try_connect(struct mosquitto *mosq, const char *host, uint16_t port, mosq_sock_t *sock, const char *bind_address, bool blocking);
 int net__try_connect_step1(struct mosquitto *mosq, const char *host);
 int net__try_connect_step2(struct mosquitto *mosq, uint16_t port, mosq_sock_t *sock);
-int net__socket_connect_step3(struct mosquitto *mosq, const char *host, uint16_t port, const char *bind_address, bool blocking);
+int net__socket_connect_step3(struct mosquitto *mosq, const char *host);
 int net__socket_nonblock(mosq_sock_t *sock);
 int net__socketpair(mosq_sock_t *sp1, mosq_sock_t *sp2);
 
@@ -71,6 +71,11 @@ ssize_t net__write(struct mosquitto *mosq, void *buf, size_t count);
 #ifdef WITH_TLS
 int net__socket_apply_tls(struct mosquitto *mosq);
 int net__socket_connect_tls(struct mosquitto *mosq);
+UI_METHOD *net__get_ui_method(void);
+#define ENGINE_FINISH(e) if(e) ENGINE_finish(e)
+#define ENGINE_SECRET_MODE "SECRET_MODE"
+#define ENGINE_SECRET_MODE_SHA 0x1000
+#define ENGINE_PIN "PIN"
 #endif
 
 #endif
