@@ -87,7 +87,7 @@ enum mosq_err_t {
 	MOSQ_ERR_MALFORMED_UTF8 = 18,
 	MOSQ_ERR_KEEPALIVE = 19, 
 	MOSQ_ERR_LOOKUP = 20, 
-	MOSQ_ERR_BRIDGE_DYNA = 21,
+	MOSQ_ERR_BRIDGE_DYNA = 30
 };
 
 /* Error values */
