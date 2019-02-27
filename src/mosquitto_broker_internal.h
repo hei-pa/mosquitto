@@ -637,6 +637,7 @@ int bridge__dynamic_parse_payload_del(void* payload, struct mosquitto_db *db, in
  * Property related functions
  * ============================================================ */
 int property__process_connect(struct mosquitto *context, mosquitto_property *props);
+int property__process_will(struct mosquitto *context, struct mosquitto_message_all *msg, mosquitto_property *props);
 int property__process_disconnect(struct mosquitto *context, mosquitto_property *props);
 
 /* ============================================================
@@ -682,5 +683,12 @@ struct libwebsocket_context *mosq_websockets_init(struct mosquitto__listener *li
 #  endif
 #endif
 void do_disconnect(struct mosquitto_db *db, struct mosquitto *context);
+
+/* ============================================================
+ * Will delay
+ * ============================================================ */
+int will_delay__add(struct mosquitto *context);
+void will_delay__check(struct mosquitto_db *db, time_t now);
+void will_delay__send_all(struct mosquitto_db *db);
 
 #endif

@@ -104,6 +104,10 @@ tests = [
     (1, './07-will-null-topic.py'),
     (1, './07-will-invalid-utf8.py'),
     (1, './07-will-no-flag.py'),
+    (1, './07-will-delay.py'),
+    (1, './07-will-delay-recover.py'),
+    (1, './07-will-delay-reconnect.py'),
+    (1, './07-will-disconnect-with-will.py'),
 
     (2, './08-ssl-connect-no-auth.py'),
     (2, './08-ssl-connect-no-auth-wrong-ca.py'),

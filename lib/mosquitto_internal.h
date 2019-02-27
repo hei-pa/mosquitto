@@ -109,6 +109,7 @@ enum mosquitto_client_state {
 	mosq_cs_expiring = 15,
 	mosq_cs_connecting = 16,
 	mosq_cs_duplicate = 17, /* client that has been taken over by another with the same id */
+	mosq_cs_disconnect_with_will = 18,
 };
 
 enum mosquitto__protocol {
@@ -195,6 +196,8 @@ struct mosquitto {
 	struct mosquitto__alias *aliases;
 	uint32_t maximum_packet_size;
 	int alias_count;
+	uint32_t will_delay_interval;
+	time_t will_delay_time;
 #ifdef WITH_TLS
 	SSL *ssl;
 	SSL_CTX *ssl_ctx;
