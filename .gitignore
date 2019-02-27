@@ -21,6 +21,8 @@ client/mosquitto_bridge
 
 cov-int/
 
+cov-int/
+
 dist/
 
 examples/mysql_log/mosquitto_mysql_log

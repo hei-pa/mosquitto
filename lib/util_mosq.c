@@ -28,8 +28,15 @@ Contributors:
 #  include <sys/stat.h>
 #endif
 
+#if !defined(WITH_TLS) && defined(__linux__)
+#  if defined(__GLIBC__) && __GLIBC_PREREQ(2, 25)
+#    include <sys/random.h>
+#  endif
+#endif
+
 #ifdef WITH_TLS
 #  include <openssl/bn.h>
+#  include <openssl/rand.h>
 #endif
 
 #ifdef WITH_BROKER
@@ -294,4 +301,40 @@ void util__increment_send_quota(struct mosquitto *mosq)
 	if(mosq->send_quota < mosq->send_maximum){
 		mosq->send_quota++;
 	}
+}
+
+
+int util__random_bytes(void *bytes, int count)
+{
+	int rc = MOSQ_ERR_UNKNOWN;
+
+#ifdef WITH_TLS
+	if(RAND_bytes(bytes, count) == 1){
+		rc = MOSQ_ERR_SUCCESS;
+	}
+#elif defined(__GLIBC__) && __GLIBC_PREREQ(2, 25)
+	if(getrandom(bytes, count, 0) == 0){
+		rc = MOSQ_ERR_SUCCESS;
+	}
+#elif defined(WIN32)
+	HRYPTPROV provider;
+
+	if(!CryptAcquireContext(&provider, NULL, NULL, PROV_RSA_FULL, CRYPT_VERIFYCONTEXT)){
+		return MOSQ_ERR_UNKNOWN;
+	}
+
+	if(CryptGenRandom(provider, count, bytes)){
+		rc = MOSQ_ERR_SUCCESS;
+	}
+
+	CryptReleaseContext(provider, 0);
+#else
+	int i;
+
+	for(i=0; i<count; i++){
+		((uint8_t *)bytes)[i] = (uint8_t )(random()&0xFF);
+	}
+	rc = MOSQ_ERR_SUCCESS;
+#endif
+	return rc;
 }

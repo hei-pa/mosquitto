@@ -39,6 +39,8 @@ int property__read(struct mosquitto__packet *packet, int32_t *len, mosquitto_pro
 	char *str1, *str2;
 	int slen1, slen2;
 
+	if(!property) return MOSQ_ERR_INVAL;
+
 	rc = packet__read_varint(packet, &property_identifier, NULL);
 	if(rc) return rc;
 	*len -= 1;
@@ -154,6 +156,10 @@ int property__read_all(int command, struct mosquitto__packet *packet, mosquitto_
 	 * same order for all */
 	while(proplen > 0){
 		p = mosquitto__calloc(1, sizeof(mosquitto_property));
+		if(!p){
+			mosquitto_property_free_all(properties);
+			return MOSQ_ERR_NOMEM;
+		}
 
 		rc = property__read(packet, &proplen, p); 
 		if(rc){
