@@ -19,6 +19,8 @@ client/mosquitto_pub
 client/mosquitto_sub
 client/mosquitto_bridge
 
+cov-int/
+
 dist/
 
 examples/mysql_log/mosquitto_mysql_log
