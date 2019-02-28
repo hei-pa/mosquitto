@@ -312,7 +312,8 @@ static int mosquitto__tls_server_ctx(struct mosquitto__listener *listener)
 {
 	char buf[256];
 	int rc;
-
+	FILE *dhparamfile;
+	DH *dhparam = NULL;
 
 #if OPENSSL_VERSION_NUMBER < 0x10100000L
 	listener->ssl_ctx = SSL_CTX_new(SSLv23_server_method());
@@ -326,13 +327,16 @@ static int mosquitto__tls_server_ctx(struct mosquitto__listener *listener)
 	}
 
 	if(listener->tls_version == NULL){
-		SSL_CTX_set_options(listener->ssl_ctx, SSL_OP_NO_SSLv3);
+		SSL_CTX_set_options(listener->ssl_ctx, SSL_OP_NO_SSLv3 | SSL_OP_NO_TLSv1);
+	}else if(!strcmp(listener->tls_version, "tlsv1.3")){
+		SSL_CTX_set_options(listener->ssl_ctx, SSL_OP_NO_SSLv3 | SSL_OP_NO_TLSv1 | SSL_OP_NO_TLSv1_1 | SSL_OP_NO_TLSv1_2);
 	}else if(!strcmp(listener->tls_version, "tlsv1.2")){
-		SSL_CTX_set_options(listener->ssl_ctx, SSL_OP_NO_SSLv3 | SSL_OP_NO_TLSv1_1 | SSL_OP_NO_TLSv1);
+		SSL_CTX_set_options(listener->ssl_ctx, SSL_OP_NO_SSLv3 | SSL_OP_NO_TLSv1 | SSL_OP_NO_TLSv1_1 | SSL_OP_NO_TLSv1_3);
 	}else if(!strcmp(listener->tls_version, "tlsv1.1")){
-		SSL_CTX_set_options(listener->ssl_ctx, SSL_OP_NO_SSLv3 | SSL_OP_NO_TLSv1_2 | SSL_OP_NO_TLSv1);
-	}else if(!strcmp(listener->tls_version, "tlsv1")){
-		SSL_CTX_set_options(listener->ssl_ctx, SSL_OP_NO_SSLv3 | SSL_OP_NO_TLSv1_2 | SSL_OP_NO_TLSv1_1);
+		SSL_CTX_set_options(listener->ssl_ctx, SSL_OP_NO_SSLv3 | SSL_OP_NO_TLSv1 | SSL_OP_NO_TLSv1_2 | SSL_OP_NO_TLSv1_3);
+	}else{
+		log__printf(NULL, MOSQ_LOG_ERR, "Error: Unsupported tls_version \"%s\".", listener->tls_version);
+		return 1;
 	}
 
 #ifdef SSL_OP_NO_COMPRESSION
@@ -368,6 +372,20 @@ static int mosquitto__tls_server_ctx(struct mosquitto__listener *listener)
 		rc = SSL_CTX_set_cipher_list(listener->ssl_ctx, "DEFAULT:!aNULL:!eNULL:!LOW:!EXPORT:!SSLv2:@STRENGTH");
 		if(rc == 0){
 			log__printf(NULL, MOSQ_LOG_ERR, "Error: Unable to set TLS ciphers. Check cipher list \"%s\".", listener->ciphers);
+			return 1;
+		}
+	}
+	if(listener->dhparamfile){
+		dhparamfile = fopen(listener->dhparamfile, "r");
+		if(!dhparamfile){
+			log__printf(NULL, MOSQ_LOG_ERR, "Error loading dhparamfile \"%s\".", listener->dhparamfile);
+			return 1;
+		}
+		dhparam = PEM_read_DHparams(dhparamfile, NULL, NULL, NULL);
+		fclose(dhparamfile);
+
+		if(dhparam == NULL || SSL_CTX_set_tmp_dh(listener->ssl_ctx, dhparam) != 1){
+			log__printf(NULL, MOSQ_LOG_ERR, "Error loading dhparamfile \"%s\".", listener->dhparamfile);
 			return 1;
 		}
 	}

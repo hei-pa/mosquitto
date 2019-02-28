@@ -531,13 +531,13 @@ static int net__init_ssl_ctx(struct mosquitto *mosq)
 		}
 
 		if(!mosq->tls_version){
-			SSL_CTX_set_options(mosq->ssl_ctx, SSL_OP_NO_SSLv3);
+			SSL_CTX_set_options(mosq->ssl_ctx, SSL_OP_NO_SSLv3 | SSL_OP_NO_TLSv1);
+		}else if(!strcmp(mosq->tls_version, "tlsv1.3")){
+			SSL_CTX_set_options(mosq->ssl_ctx, SSL_OP_NO_SSLv3 | SSL_OP_NO_TLSv1 | SSL_OP_NO_TLSv1_1 | SSL_OP_NO_TLSv1_2);
 		}else if(!strcmp(mosq->tls_version, "tlsv1.2")){
-			SSL_CTX_set_options(mosq->ssl_ctx, SSL_OP_NO_SSLv3 | SSL_OP_NO_TLSv1_1 | SSL_OP_NO_TLSv1);
+			SSL_CTX_set_options(mosq->ssl_ctx, SSL_OP_NO_SSLv3 | SSL_OP_NO_TLSv1 | SSL_OP_NO_TLSv1_1 | SSL_OP_NO_TLSv1_3);
 		}else if(!strcmp(mosq->tls_version, "tlsv1.1")){
-			SSL_CTX_set_options(mosq->ssl_ctx, SSL_OP_NO_SSLv3 | SSL_OP_NO_TLSv1_2 | SSL_OP_NO_TLSv1);
-		}else if(!strcmp(mosq->tls_version, "tlsv1")){
-			SSL_CTX_set_options(mosq->ssl_ctx, SSL_OP_NO_SSLv3 | SSL_OP_NO_TLSv1_2 | SSL_OP_NO_TLSv1_1);
+			SSL_CTX_set_options(mosq->ssl_ctx, SSL_OP_NO_SSLv3 | SSL_OP_NO_TLSv1 | SSL_OP_NO_TLSv1_2 | SSL_OP_NO_TLSv1_3);
 		}else{
 			log__printf(mosq, MOSQ_LOG_ERR, "Error: Protocol %s not supported.", mosq->tls_version);
 			COMPAT_CLOSE(mosq->sock);
@@ -757,7 +757,7 @@ int net__socket_connect_step3(struct mosquitto *mosq, const char *host)
 int net__socket_connect(struct mosquitto *mosq, const char *host, uint16_t port, const char *bind_address, bool blocking)
 {
 	mosq_sock_t sock = INVALID_SOCKET;
-	int rc;
+	int rc, rc2;
 
 	if(!mosq || !host || !port) return MOSQ_ERR_INVAL;
 
@@ -770,8 +770,8 @@ int net__socket_connect(struct mosquitto *mosq, const char *host, uint16_t port,
 	if(!mosq->socks5_host)
 #endif
 	{
-		rc = net__socket_connect_step3(mosq, host);
-		if(rc) return rc;
+		rc2 = net__socket_connect_step3(mosq, host);
+		if(rc2) return rc2;
 	}
 
 	return MOSQ_ERR_SUCCESS;

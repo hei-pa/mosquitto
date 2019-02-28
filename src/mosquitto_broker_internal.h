@@ -234,6 +234,7 @@ struct mosquitto__listener {
 	SSL_CTX *ssl_ctx;
 	char *crlfile;
 	char *tls_version;
+	char *dhparamfile;
 	bool use_identity_as_username;
 	bool use_subject_as_username;
 	bool require_certificate;
@@ -289,6 +290,7 @@ struct mosquitto__config {
 	char *user;
 #ifdef WITH_WEBSOCKETS
 	int websockets_log_level;
+	int websockets_headers_size;
 	bool have_websockets_listener;
 #endif
 #ifdef WITH_BRIDGE
@@ -680,9 +682,9 @@ DWORD WINAPI SigThreadProc(void* data);
  * ============================================================ */
 #ifdef WITH_WEBSOCKETS
 #  if defined(LWS_LIBRARY_VERSION_NUMBER)
-struct lws_context *mosq_websockets_init(struct mosquitto__listener *listener, int log_level);
+struct lws_context *mosq_websockets_init(struct mosquitto__listener *listener, const struct mosquitto__config *conf);
 #  else
-struct libwebsocket_context *mosq_websockets_init(struct mosquitto__listener *listener, int log_level);
+struct libwebsocket_context *mosq_websockets_init(struct mosquitto__listener *listener, const struct mosquitto__config *conf);
 #  endif
 #endif
 void do_disconnect(struct mosquitto_db *db, struct mosquitto *context);
