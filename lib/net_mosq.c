@@ -123,17 +123,17 @@ int net__init(void)
 #endif
 
 #ifdef WITH_TLS
-#  if OPENSSL_VERSION_NUMBER < 0x10100000L || OPENSSL_API_COMPAT < 0x10100000L
+#  if OPENSSL_VERSION_NUMBER < 0x10100000L
 	SSL_load_error_strings();
 	SSL_library_init();
 	OpenSSL_add_all_algorithms();
-	ENGINE_load_builtin_engines();
-	setup_ui_method();
 #  else
 	OPENSSL_init_crypto(OPENSSL_INIT_ADD_ALL_CIPHERS \
 			| OPENSSL_INIT_ADD_ALL_DIGESTS \
 			| OPENSSL_INIT_LOAD_CONFIG, NULL);
 #  endif
+	ENGINE_load_builtin_engines();
+	setup_ui_method();
 	if(tls_ex_index_mosq == -1){
 		tls_ex_index_mosq = SSL_get_ex_new_index(0, "client context", NULL, NULL, NULL);
 	}
@@ -144,10 +144,10 @@ int net__init(void)
 void net__cleanup(void)
 {
 #ifdef WITH_TLS
-#  if OPENSSL_VERSION_NUMBER < 0x10100000L || OPENSSL_API_COMPAT < 0x10100000L
+#  if OPENSSL_VERSION_NUMBER < 0x10100000L
 	CRYPTO_cleanup_all_ex_data();
 	ERR_free_strings();
-	ERR_remove_state(0);
+	ERR_remove_thread_state(NULL);
 	EVP_cleanup();
 
 #    if !defined(OPENSSL_NO_ENGINE)
@@ -532,12 +532,19 @@ static int net__init_ssl_ctx(struct mosquitto *mosq)
 
 		if(!mosq->tls_version){
 			SSL_CTX_set_options(mosq->ssl_ctx, SSL_OP_NO_SSLv3 | SSL_OP_NO_TLSv1);
+#ifdef SSL_OP_NO_TLSv1_3
 		}else if(!strcmp(mosq->tls_version, "tlsv1.3")){
 			SSL_CTX_set_options(mosq->ssl_ctx, SSL_OP_NO_SSLv3 | SSL_OP_NO_TLSv1 | SSL_OP_NO_TLSv1_1 | SSL_OP_NO_TLSv1_2);
 		}else if(!strcmp(mosq->tls_version, "tlsv1.2")){
 			SSL_CTX_set_options(mosq->ssl_ctx, SSL_OP_NO_SSLv3 | SSL_OP_NO_TLSv1 | SSL_OP_NO_TLSv1_1 | SSL_OP_NO_TLSv1_3);
 		}else if(!strcmp(mosq->tls_version, "tlsv1.1")){
 			SSL_CTX_set_options(mosq->ssl_ctx, SSL_OP_NO_SSLv3 | SSL_OP_NO_TLSv1 | SSL_OP_NO_TLSv1_2 | SSL_OP_NO_TLSv1_3);
+#else
+		}else if(!strcmp(mosq->tls_version, "tlsv1.2")){
+			SSL_CTX_set_options(mosq->ssl_ctx, SSL_OP_NO_SSLv3 | SSL_OP_NO_TLSv1 | SSL_OP_NO_TLSv1_1);
+		}else if(!strcmp(mosq->tls_version, "tlsv1.1")){
+			SSL_CTX_set_options(mosq->ssl_ctx, SSL_OP_NO_SSLv3 | SSL_OP_NO_TLSv1 | SSL_OP_NO_TLSv1_2);
+#endif
 		}else{
 			log__printf(mosq, MOSQ_LOG_ERR, "Error: Protocol %s not supported.", mosq->tls_version);
 			COMPAT_CLOSE(mosq->sock);
