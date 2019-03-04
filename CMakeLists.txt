@@ -99,6 +99,15 @@ endif (WITH_THREADING)
 
 option(DOCUMENTATION "Build documentation?" ON)
 
+option(WITH_DLT "Include DLT support?" OFF)
+message(STATUS "WITH_DLT = ${WITH_DLT}")
+if (WITH_DLT)
+	#find_package(DLT REQUIRED)
+	find_package(PkgConfig)
+	pkg_check_modules(DLT "automotive-dlt >= 2.11")
+	add_definitions("-DWITH_DLT")
+endif (WITH_DLT)
+
 # ========================================
 # Include projects
 # ========================================
