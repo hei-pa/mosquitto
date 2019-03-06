@@ -297,6 +297,7 @@ endif
 
 ifeq ($(WITH_BUNDLED_DEPS),yes)
 	BROKER_CFLAGS:=$(BROKER_CFLAGS) -Ideps
+	CLIENT_CFLAGS:=$(CLIENT_CFLAGS) -I../src/deps
 endif
 
 ifeq ($(WITH_COVERAGE),yes)
