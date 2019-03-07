@@ -26,7 +26,7 @@ static_pub : pub_client.o pub_shared.o client_props.o client_shared.o ../lib/lib
 static_sub : sub_client.o sub_client_output.o client_props.o client_shared.o ../lib/libmosquitto.a
 	${CROSS_COMPILE}${CC} $^ -o mosquitto_sub ${CLIENT_LDFLAGS} -lssl -lcrypto -lpthread
 
-static_bridge : bridge_client.o client_shared.o ../lib/libmosquitto.a
+static_bridge : bridge_client.o client_props.o client_shared.o ../lib/libmosquitto.a
 	${CROSS_COMPILE}${CC} $^ -o mosquitto_bridge ${CLIENT_LDFLAGS} -lssl -lcrypto -lpthread
 
 mosquitto_pub : pub_client.o pub_shared.o client_shared.o client_props.o
@@ -35,7 +35,7 @@ mosquitto_pub : pub_client.o pub_shared.o client_shared.o client_props.o
 mosquitto_sub : sub_client.o sub_client_output.o client_shared.o client_props.o
 	${CROSS_COMPILE}${CC} $^ -o $@ ${CLIENT_LDFLAGS}
 
-mosquitto_bridge : bridge_client.o client_shared.o
+mosquitto_bridge : bridge_client.o client_shared.o client_props.o
 	${CROSS_COMPILE}${CC} $^ -o $@ ${CLIENT_LDFLAGS}
 
 pub_client.o : pub_client.c ../lib/libmosquitto.so.${SOVERSION}
