@@ -483,7 +483,7 @@ int bridge__disconnect(struct mosquitto_db *db, struct mosquitto *context)
 	db__messages_easy_queue(db, context, notification_topic, 1, 1, &notification_payload, 1, 0, NULL);
 
 	log__printf(NULL, MOSQ_LOG_NOTICE, "Disconnecting bridge %s (%s:%d)", context->bridge->name, context->bridge->addresses[0].address, context->bridge->addresses[0].port);
-	rc = send__disconnect(context);
+	rc = send__disconnect(context, 0, NULL);
 	if(rc<0){
 		log__printf(NULL, MOSQ_LOG_ERR, "Error disconnecting bridge: %s.", gai_strerror(errno));
 		return rc;
