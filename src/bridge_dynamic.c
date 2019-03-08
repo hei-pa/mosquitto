@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2017 Tifaifai Maupiti <tifaifai.maupiti@gmail.com>
+Copyright (c) 2017-2019 Tifaifai Maupiti <tifaifai.maupiti@gmail.com>
 
 All rights reserved. This program and the accompanying materials
 are made available under the terms of the Eclipse Public License v1.0
@@ -26,7 +26,7 @@ Contributor:
 
 #include "config.h"
 #include "mosquitto_broker_internal.h"
-#include "mqtt3_protocol.h"
+#include "mqtt_protocol.h"
 #include "memory_mosq.h"
 #include "read_handle.h"
 #include "send_mosq.h"
