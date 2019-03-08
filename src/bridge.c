@@ -480,7 +480,7 @@ int bridge__disconnect(struct mosquitto_db *db, struct mosquitto *context)
 	snprintf(notification_topic, notification_topic_len+1, "$SYS/broker/connection/%s/state", context->bridge->remote_clientid);
 
 	notification_payload = '0';
-	db__messages_easy_queue(db, context, notification_topic, 1, 1, &notification_payload, 1);
+	db__messages_easy_queue(db, context, notification_topic, 1, 1, &notification_payload, 1, 0, NULL);
 
 	log__printf(NULL, MOSQ_LOG_NOTICE, "Disconnecting bridge %s (%s:%d)", context->bridge->name, context->bridge->addresses[0].address, context->bridge->addresses[0].port);
 	rc = send__disconnect(context);
