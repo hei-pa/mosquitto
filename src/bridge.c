@@ -409,10 +409,24 @@ int bridge__connect(struct mosquitto_db *db, struct mosquitto *context)
 
 	HASH_ADD(hh_sock, db->contexts_by_sock, sock, sizeof(context->sock), context);
 
-	rc2 = send__connect(context, context->keepalive, context->clean_session);
-	if(rc2 == MOSQ_ERR_SUCCESS){
-		return rc;
-	}else if(rc2 == MOSQ_ERR_ERRNO && errno == ENOTCONN){
+	if(rc == MOSQ_ERR_CONN_PENDING){
+		context->state = mosq_cs_connect_pending;
+	}
+	rc = send__connect(context, context->keepalive, context->clean_session);
+	if(rc == MOSQ_ERR_SUCCESS){
+#ifdef WITH_EPOLL
+		if(context->bridge){
+			ev.data.fd = context->sock;
+			ev.events = EPOLLIN;
+			context->events = EPOLLIN;
+			if (epoll_ctl(db->epollfd, EPOLL_CTL_ADD, context->sock, &ev) == -1) {
+				log__printf(NULL, MOSQ_LOG_ERR, "Error in epoll initial registering bridge: %s", strerror(errno));
+				(void)close(db->epollfd);
+				db->epollfd = 0;
+				return MOSQ_ERR_UNKNOWN;
+			}
+		}
+#endif
 		return MOSQ_ERR_SUCCESS;
 	}else{
 		if(rc2 == MOSQ_ERR_TLS){
