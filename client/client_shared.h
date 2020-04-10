@@ -18,6 +18,7 @@ Contributors:
 #define CLIENT_CONFIG_H
 
 #include <stdio.h>
+#include <mosquitto_broker_internal.h>
 
 #ifdef WIN32
 #  include <winsock2.h>
@@ -37,6 +38,8 @@ Contributors:
 #define CLIENT_SUB 2
 #define CLIENT_RR 3
 #define CLIENT_RESPONSE_TOPIC 4
+#define BRIDGE_NEW 5
+#define BRIDGE_DEL 6
 
 struct mosq_config {
 	char *id;
@@ -109,6 +112,9 @@ struct mosq_config {
 	char *socks5_username;
 	char *socks5_password;
 #endif
+	struct mosquitto__bridge bridge;
+	int bridgeType;
+	int know_bridge_connection;
 	mosquitto_property *connect_props;
 	mosquitto_property *publish_props;
 	mosquitto_property *subscribe_props;
@@ -120,6 +126,7 @@ struct mosq_config {
 };
 
 int client_config_load(struct mosq_config *config, int pub_or_sub, int argc, char *argv[]);
+int client_config_load_bridge(struct mosq_config *config, int pub_or_sub, int argc, char *argv[]);
 void client_config_cleanup(struct mosq_config *cfg);
 int client_opts_set(struct mosquitto *mosq, struct mosq_config *cfg);
 int client_id_generate(struct mosq_config *cfg);

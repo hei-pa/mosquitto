@@ -4,12 +4,12 @@ Copyright (c) 2009-2020 Roger Light <roger@atchoo.org>
 All rights reserved. This program and the accompanying materials
 are made available under the terms of the Eclipse Public License v1.0
 and Eclipse Distribution License v1.0 which accompany this distribution.
- 
+
 The Eclipse Public License is available at
    http://www.eclipse.org/legal/epl-v10.html
 and the Eclipse Distribution License is available at
   http://www.eclipse.org/org/documents/edl-v10.php.
- 
+
 Contributors:
    Roger Light - initial implementation and documentation.
    Tatsuzo Osawa - Add epoll.
@@ -192,7 +192,7 @@ int mosquitto_main_loop(struct mosquitto_db *db, mosq_sock_t *listensock, int li
 			ev.events = EPOLLIN;
 			context->events = EPOLLIN;
 			if (epoll_ctl(db->epollfd, EPOLL_CTL_ADD, context->sock, &ev) == -1) {
-				log__printf(NULL, MOSQ_LOG_ERR, "Error in epoll initial registering bridge: %s", strerror(errno));
+				log__printf(NULL, MOSQ_LOG_ERR, "Error in epoll initial registering bridge (Loop): %s", strerror(errno));
 				(void)close(db->epollfd);
 				db->epollfd = 0;
 				return MOSQ_ERR_UNKNOWN;
@@ -641,7 +641,7 @@ void do_disconnect(struct mosquitto_db *db, struct mosquitto *context, int reaso
 			if (epoll_ctl(db->epollfd, EPOLL_CTL_DEL, context->sock, &ev) == -1) {
 				log__printf(NULL, MOSQ_LOG_DEBUG, "Error in epoll disconnecting websockets: %s", strerror(errno));
 			}
-#endif		
+#endif
 			context->sock = INVALID_SOCKET;
 			context->pollfd_index = -1;
 		}
@@ -693,7 +693,7 @@ void do_disconnect(struct mosquitto_db *db, struct mosquitto *context, int reaso
 				log__printf(NULL, MOSQ_LOG_DEBUG, "Error in epoll disconnecting: %s", strerror(errno));
 			}
 		}
-#endif		
+#endif
 		context__disconnect(db, context);
 	}
 }
@@ -762,7 +762,7 @@ static void loop_handle_reads_writes(struct mosquitto_db *db, struct pollfd *pol
 #else
 #ifdef WITH_EPOLL
 		if(events & EPOLLOUT){
-#else			
+#else
 		if(pollfds[context->pollfd_index].revents & POLLOUT){
 #endif
 #endif
@@ -844,6 +844,3 @@ static void loop_handle_reads_writes(struct mosquitto_db *db, struct pollfd *pol
 		}
 	}
 }
-
-
-

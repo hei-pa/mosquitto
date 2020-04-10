@@ -4,17 +4,22 @@ Copyright (c) 2009-2020 Roger Light <roger@atchoo.org>
 All rights reserved. This program and the accompanying materials
 are made available under the terms of the Eclipse Public License v1.0
 and Eclipse Distribution License v1.0 which accompany this distribution.
- 
+
 The Eclipse Public License is available at
    http://www.eclipse.org/legal/epl-v10.html
 and the Eclipse Distribution License is available at
   http://www.eclipse.org/org/documents/edl-v10.php.
- 
+
 Contributors:
    Roger Light - initial implementation and documentation.
 */
 
 #include "config.h"
+
+#ifdef WITH_EPOLL
+#include <sys/epoll.h>
+#define MAX_EVENTS 1000
+#endif
 
 #include <assert.h>
 #include <errno.h>
@@ -116,6 +121,34 @@ int bridge__new(struct mosquitto_db *db, struct mosquitto__bridge *bridge)
 #endif
 }
 
+int bridge__del(struct mosquitto_db *db, int index)
+{
+	struct mosquitto **bridges;
+	int i;
+
+	assert(db);
+
+	bridge__disconnect(db,db->bridges[index]);
+
+	db->bridge_count--;
+
+	for(i=index; i<db->bridge_count; i++){
+		db->bridges[i] = db->bridges[i+1];
+	}
+
+	if(db->bridge_count==0){
+		db->bridges[0] = NULL;
+	}else{
+		bridges = mosquitto__realloc(db->bridges, (db->bridge_count)*sizeof(struct mosquitto *));
+		if(bridges){
+			db->bridges = bridges;
+		}else{
+			return MOSQ_ERR_NOMEM;
+		}
+	}
+	return 0;
+}
+
 #if defined(__GLIBC__) && defined(WITH_ADNS)
 int bridge__connect_step1(struct mosquitto_db *db, struct mosquitto *context)
 {
@@ -124,7 +157,9 @@ int bridge__connect_step1(struct mosquitto_db *db, struct mosquitto *context)
 	int notification_topic_len;
 	uint8_t notification_payload;
 	int i;
-
+#ifdef WITH_EPOLL
+	struct epoll_event ev;
+#endif
 	if(!context || !context->bridge) return MOSQ_ERR_INVAL;
 
 	mosquitto__set_state(context, mosq_cs_new);
@@ -303,6 +338,12 @@ int bridge__connect(struct mosquitto_db *db, struct mosquitto *context)
 	char *notification_topic;
 	int notification_topic_len;
 	uint8_t notification_payload;
+#ifdef WITH_EPOLL
+		struct epoll_event ev, events[MAX_EVENTS];
+		struct mosquitto *ctxt_tmp;
+		mosq_sock_t *listensock = NULL;
+		int listensock_count = 0;
+#endif
 
 	if(!context || !context->bridge) return MOSQ_ERR_INVAL;
 
@@ -405,27 +446,100 @@ int bridge__connect(struct mosquitto_db *db, struct mosquitto *context)
 
 	HASH_ADD(hh_sock, db->contexts_by_sock, sock, sizeof(context->sock), context);
 
+	if(rc == MOSQ_ERR_CONN_PENDING){
+		context->state = mosq_cs_connect_pending;
+	}
 	rc2 = send__connect(context, context->keepalive, context->clean_start, NULL);
 	if(rc2 == MOSQ_ERR_SUCCESS){
-		bridge__backoff_reset(context);
-		return rc;
-	}else if(rc2 == MOSQ_ERR_ERRNO && errno == ENOTCONN){
+#ifdef WITH_EPOLL
+/*
+db->epollfd = 0;
+if ((db->epollfd = epoll_create(MAX_EVENTS)) == -1) {
+	log__printf(NULL, MOSQ_LOG_ERR, "Error in epoll creating: %s", strerror(errno));
+	return MOSQ_ERR_UNKNOWN;
+}
+*/
+/*
+memset(&ev, 0, sizeof(struct epoll_event));
+memset(&events, 0, sizeof(struct epoll_event)*MAX_EVENTS);
+for(i=0; i<listensock_count; i++){
+	ev.data.fd = listensock[i];
+	ev.events = EPOLLIN;
+	if (epoll_ctl(db->epollfd, EPOLL_CTL_ADD, listensock[i], &ev) == -1) {
+		log__printf(NULL, MOSQ_LOG_ERR, "Error in epoll initial registering: %s", strerror(errno));
+		(void)close(db->epollfd);
+		db->epollfd = 0;
+		return MOSQ_ERR_UNKNOWN;
+	}
+}
+
+  HASH_ITER(hh_sock, db->contexts_by_sock, context, ctxt_tmp){
+*/
+		if(context->bridge){
+			ev.data.fd = context->sock;
+			ev.events = EPOLLIN;
+			context->events = EPOLLIN;
+			if (epoll_ctl(db->epollfd, EPOLL_CTL_ADD, context->sock, &ev) == -1) {
+				log__printf(NULL, MOSQ_LOG_ERR, "Error in epoll initial registering bridge (Bridge): %s", strerror(errno));
+				(void)close(db->epollfd);
+				db->epollfd = 0;
+				return MOSQ_ERR_UNKNOWN;
+			}
+		}
+#endif
+		return MOSQ_ERR_SUCCESS;
+}else if(rc2 == MOSQ_ERR_ERRNO && errno == ENOTCONN){
 		bridge__backoff_reset(context);
 		return MOSQ_ERR_SUCCESS;
-	}else{
+}else{
 		if(rc2 == MOSQ_ERR_TLS){
 			return rc2; /* Error already printed */
 		}else if(rc2 == MOSQ_ERR_ERRNO){
 			log__printf(NULL, MOSQ_LOG_ERR, "Error creating bridge: %s.", strerror(errno));
 		}else if(rc2 == MOSQ_ERR_EAI){
 			log__printf(NULL, MOSQ_LOG_ERR, "Error creating bridge: %s.", gai_strerror(errno));
-		}
+    }
 		net__socket_close(db, context);
 		return rc2;
 	}
 }
 #endif
 
+int bridge__disconnect(struct mosquitto_db *db, struct mosquitto *context)
+{
+	int rc;
+	char *notification_topic;
+	int notification_topic_len;
+	uint8_t notification_payload;
+
+	if(!context || !context->bridge) return MOSQ_ERR_INVAL;
+
+	bridge__packet_cleanup(context);
+
+	db__messages_delete(db, context);
+
+	sub__clean_session(db, context);
+
+	notification_topic_len = strlen(context->bridge->remote_clientid)+strlen("$SYS/broker/connection//state");
+	notification_topic = mosquitto__malloc(sizeof(char)*(notification_topic_len+1));
+	if(!notification_topic) return MOSQ_ERR_NOMEM;
+
+	snprintf(notification_topic, notification_topic_len+1, "$SYS/broker/connection/%s/state", context->bridge->remote_clientid);
+
+	notification_payload = '0';
+	db__messages_easy_queue(db, context, notification_topic, 1, 1, &notification_payload, 1, 0, NULL);
+
+	log__printf(NULL, MOSQ_LOG_NOTICE, "Disconnecting bridge %s (%s:%d)", context->bridge->name, context->bridge->addresses[0].address, context->bridge->addresses[0].port);
+	rc = send__disconnect(context, MQTT_RC_NORMAL_DISCONNECTION, NULL);
+	if(rc<0){
+		log__printf(NULL, MOSQ_LOG_ERR, "Error disconnecting bridge: %s.", gai_strerror(errno));
+		return rc;
+	}
+
+	do_disconnect(db, context, MOSQ_ERR_SUCCESS);
+
+	return rc;
+}
 
 void bridge__packet_cleanup(struct mosquitto *context)
 {

@@ -80,7 +80,7 @@ WITH_SOCKS:=yes
 WITH_STRIP:=no
 
 # Build static libraries
-WITH_STATIC_LIBRARIES:=no
+WITH_STATIC_LIBRARIES:=yes
 
 # Use this variable to add extra library dependencies when building the clients
 # with the static libmosquitto library. This may be required on some systems
@@ -150,7 +150,7 @@ BROKER_LDFLAGS:=${LDFLAGS}
 BROKER_LDADD:=
 
 CLIENT_CPPFLAGS:=$(CPPFLAGS) -I.. -I../lib
-CLIENT_CFLAGS:=${CFLAGS} -DVERSION="\"${VERSION}\""
+CLIENT_CFLAGS:=${CFLAGS} -I../src -DVERSION="\"${VERSION}\""
 CLIENT_LDFLAGS:=$(LDFLAGS) -L../lib
 CLIENT_LDADD:=
 
@@ -164,6 +164,7 @@ endif
 
 ifeq ($(UNAME),Linux)
 	BROKER_LDADD:=$(BROKER_LDADD) -lrt
+	BROKER_LIBS:=$(BROKER_LIBS) -lanl
 	BROKER_LDFLAGS:=$(BROKER_LDFLAGS) -Wl,--dynamic-list=linker.syms
 	LIB_LIBADD:=$(LIB_LIBADD) -lrt
 endif
@@ -310,6 +311,7 @@ endif
 
 ifeq ($(WITH_BUNDLED_DEPS),yes)
 	BROKER_CPPFLAGS:=$(BROKER_CPPFLAGS) -Ideps
+	CLIENT_CFLAGS:=$(CLIENT_CFLAGS) -I../src/deps
 endif
 
 ifeq ($(WITH_COVERAGE),yes)
