@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2017 Tifaifai Maupiti <tifaifai.maupiti@gmail.com>
+Copyright (c) 2015-2020 Tifaifai Maupiti <tifaifai.maupiti@gmail.com>
 
 All rights reserved. This program and the accompanying materials
 are made available under the terms of the Eclipse Public License v1.0
@@ -11,29 +11,40 @@ and the Eclipse Distribution License is available at
   http://www.eclipse.org/org/documents/edl-v10.php.
 
 Contributors:
-   Tifaifai Maupiti - initial implementation and documentation.
+Tifaifai Maupiti - initial implementation and documentation.
 */
 
-#define _POSIX_C_SOURCE 200809L
+#include "config.h"
 
 #include <errno.h>
 #include <fcntl.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#ifndef WIN32
 #include <signal.h>
+#include <sys/time.h>
+#include <time.h>
+#else
+#include <process.h>
+#include <winsock2.h>
+#define snprintf sprintf_s
+#endif
 
+#include <mqtt_protocol.h>
 #include <mosquitto.h>
 #include "client_shared.h"
+#include "pub_shared.h"
 
-#define STATUS_CONNECTING 0
-#define STATUS_CONNACK_RECVD 1
-#define STATUS_WAITING 2
-#define STATUS_DISCONNECTING 3
-#define STATUS_DISCONNECTED 4
+/* Global variables for use in callbacks. See sub_client.c for an example of
+ * using a struct to hold variables for use in callbacks. */
+struct mosquitto *mosq = NULL;
+bool process_messages = true;
 
-static bool connected = true;
-static bool wait = true;
+static int last_mid_sent = -1;
+static bool disconnect_sent = false;
+static int publish_count = 0;
+static volatile int status = STATUS_CONNECTING;
 
 static char *topic = NULL;
 static char *name = NULL;
@@ -42,17 +53,12 @@ static char *direction = NULL;
 static char *local_prefix = NULL;
 static char *remote_prefix = NULL;
 static char *remote_add = NULL;
-static char *msg = NULL;
 static int remote_port;
 static int qos = 0;
-static char *username = NULL;
-static char *password = NULL;
+static char *msg = NULL;
 
-struct mosq_config cfg;
-struct mosquitto *mosq = NULL;
 void * ptrMosq = NULL;
-
-int run = 1;
+int process_run = 1;
 int nb_line = 0;
 
 struct bridge{
@@ -93,33 +99,33 @@ void show_bridges(struct bridge_list* bridges)
   }
 }
 
-static void on_message(struct mosquitto *m, void *udata,const struct mosquitto_message *msg)
+void my_message_callback(struct mosquitto *mosq, void *obj, const struct mosquitto_message *message, const mosquitto_property *properties)
 {
-    struct bridge_list *bridges;
-    bridges = (struct bridge_list*) udata;
-    int valid_erase = 0;
-    int i;
+  UNUSED(properties);
 
-    if(!strcmp(msg->payload,"1")){
+  struct bridge_list *bridges;
+  bridges = (struct bridge_list*) obj;
+  int valid_erase = 0;
+  int i;
+
+  if(!strcmp(message->payload,"1")){
       bridges->bridge_list_count++;
       bridges->bridge = realloc(bridges->bridge, sizeof(struct bridge)*bridges->bridge_list_count);
       if(!bridges->bridge){
         printf("Error: Out of memory. 1\n");
         exit(-1);
       }
-
-      bridges->bridge[bridges->bridge_list_count-1].name = malloc(sizeof(char)*strlen(msg->topic));
+      bridges->bridge[bridges->bridge_list_count-1].name = malloc(sizeof(char)*strlen(message->topic));
       if(!bridges->bridge[bridges->bridge_list_count-1].name){
         printf("Error: Out of memory. 2\n");
         exit(-1);
       }
-
-      bridges->bridge[bridges->bridge_list_count-1].name = strdup(msg->topic);
+      bridges->bridge[bridges->bridge_list_count-1].name = strdup(message->topic);
       show_bridges(bridges);
     }else{
       if(bridges->bridge_list_count>0){
         for (i = 0; i < bridges->bridge_list_count; i++) {
-          if(!strcmp(bridges->bridge[i].name,msg->topic)){
+          if(!strcmp(bridges->bridge[i].name,message->topic)){
             valid_erase = i;
             bridges->bridge_list_count--;
           }
@@ -142,15 +148,114 @@ static void on_message(struct mosquitto *m, void *udata,const struct mosquitto_m
     }
 }
 
-void my_publish_callback(struct mosquitto *mosq, void *userdata, int mid)
+void my_disconnect_callback(struct mosquitto *mosq, void *obj, int rc, const mosquitto_property *properties)
 {
-  wait = false;
+	UNUSED(mosq);
+	UNUSED(obj);
+	UNUSED(rc);
+	UNUSED(properties);
+
+	if(rc == 0){
+		status = STATUS_DISCONNECTED;
+	}
 }
 
-void my_disconnect_callback(struct mosquitto *mosq, void *obj, int rc)
+int my_publish(struct mosquitto *mosq, int *mid, const char *topic, int payloadlen, void *payload, int qos, bool retain)
 {
-	 connected = false;
-	 mosquitto_loop_stop(mosq,false);
+  return mosquitto_publish_v5(mosq, mid, topic, payloadlen, payload, qos, retain, cfg.publish_props);
+}
+
+void my_connect_callback_pub(struct mosquitto *mosq, void *obj, int result, int flags, const mosquitto_property *properties)
+{
+	UNUSED(obj);
+	UNUSED(flags);
+	UNUSED(properties);
+  int rc = MOSQ_ERR_SUCCESS;
+
+	if(!result){
+		rc = my_publish(mosq, &mid_sent, cfg.topic, cfg.msglen, cfg.message, cfg.qos, cfg.retain);
+		if(rc){
+			switch(rc){
+				case MOSQ_ERR_INVAL:
+					err_printf(&cfg, "Error: Invalid input. Does your topic contain '+' or '#'?\n");
+					break;
+				case MOSQ_ERR_NOMEM:
+					err_printf(&cfg, "Error: Out of memory when trying to publish message.\n");
+					break;
+				case MOSQ_ERR_NO_CONN:
+					err_printf(&cfg, "Error: Client not connected when trying to publish.\n");
+					break;
+				case MOSQ_ERR_PROTOCOL:
+					err_printf(&cfg, "Error: Protocol error when communicating with broker.\n");
+					break;
+				case MOSQ_ERR_PAYLOAD_SIZE:
+					err_printf(&cfg, "Error: Message payload is too large.\n");
+					break;
+				case MOSQ_ERR_QOS_NOT_SUPPORTED:
+					err_printf(&cfg, "Error: Message QoS not supported on broker, try a lower QoS.\n");
+					break;
+			}
+			mosquitto_disconnect_v5(mosq, 0, cfg.disconnect_props);
+		}
+	}else{
+		if(result){
+			if(cfg.protocol_version == MQTT_PROTOCOL_V5){
+				if(result == MQTT_RC_UNSUPPORTED_PROTOCOL_VERSION){
+					err_printf(&cfg, "Connection error: %s. Try connecting to an MQTT v5 broker, or use MQTT v3.x mode.\n", mosquitto_reason_string(result));
+				}else{
+					err_printf(&cfg, "Connection error: %s\n", mosquitto_reason_string(result));
+				}
+			}else{
+				err_printf(&cfg, "Connection error: %s\n", mosquitto_connack_string(result));
+			}
+			mosquitto_disconnect_v5(mosq, 0, cfg.disconnect_props);
+		}
+	}
+}
+
+void my_publish_callback(struct mosquitto *mosq, void *obj, int mid, int reason_code, const mosquitto_property *properties)
+{
+	UNUSED(obj);
+	UNUSED(properties);
+
+	last_mid_sent = mid;
+	if(reason_code > 127){
+		err_printf(&cfg, "Warning: Publish %d failed: %s.\n", mid, mosquitto_reason_string(reason_code));
+	}
+	publish_count++;
+  if(disconnect_sent == false){
+		mosquitto_disconnect_v5(mosq, 0, cfg.disconnect_props);
+		disconnect_sent = true;
+	}
+}
+
+void my_connect_callback_sub(struct mosquitto *mosq, void *obj, int result, int flags, const mosquitto_property *properties)
+{
+	UNUSED(obj);
+	UNUSED(flags);
+	UNUSED(properties);
+
+	if(!result){
+    mosquitto_subscribe(mosq, NULL, "$SYS/broker/connection/#", 0);
+  }
+}
+
+void my_subscribe_callback(struct mosquitto *mosq, void *obj, int mid, int qos_count, const int *granted_qos)
+{
+  UNUSED(obj);
+  int i;
+
+	if(cfg.debug){
+		if(!cfg.quiet) printf("Subscribed (mid: %d): %d", mid, granted_qos[0]);
+		for(i=1; i<qos_count; i++){
+			if(!cfg.quiet) printf(", %d", granted_qos[i]);
+		}
+		if(!cfg.quiet) printf("\n");
+	}
+
+	if(cfg.exit_after_sub){
+		mosquitto_disconnect_v5(mosq, 0, cfg.disconnect_props);
+	}
 }
 
 int bridge_shared_init(void)
@@ -160,8 +265,25 @@ int bridge_shared_init(void)
     printf("Error: Out of memory.\n");
     return 1;
   }
+  bridges->bridge_list_count = 0;
   ptrMosq = bridges;
 	return 0;
+}
+
+int pub_loop(struct mosquitto *mosq)
+{
+	int rc;
+	int loop_delay = 1000;
+
+	do{
+		rc = mosquitto_loop(mosq, loop_delay, 1);
+	}while(rc == MOSQ_ERR_SUCCESS);
+
+	if(status == STATUS_DISCONNECTED){
+		return MOSQ_ERR_SUCCESS;
+	}else{
+		return rc;
+	}
 }
 
 void bridge_shared_cleanup(void)
@@ -174,7 +296,7 @@ void print_usage(void)
     int major, minor, revision;
 
     mosquitto_lib_version(&major, &minor, &revision);
-    printf("mosquitto_bridge is a simple mqtt client that will publish a message on a single topic on one broker to manage bridge dynamiclly with another and exit.\n");
+    printf("mosquitto_bridger is a simple mqtt client that will publish a message on a single topic on one broker to manage bridge dynamiclly with another and exit.\n");
     printf("mosquitto_bridge version %s running on libmosquitto %d.%d.%d.\n\n", VERSION, major, minor, revision);
     printf("Usage: mosquitto_bridge [-h local host] [-p local port] [-q qos] -a remote host -P remote port -t bridge pattern -D bridge direction -l local prefix -r remote prefix\n");
     printf("\n");
@@ -196,152 +318,180 @@ void print_usage(void)
     printf(" --help             : display this message.\n");
 }
 
-void handle_sigint(int signal)
+#ifndef WIN32
+void my_signal_handler(int signum)
 {
-	run = 0;
+	if(signum == SIGALRM || signum == SIGTERM || signum == SIGINT){
+    process_run = 0;
+	}
 }
+#endif
 
 int main(int argc, char *argv[])
 {
-    int rc;
-    int rc2;
-    int msg_len;
+	int rc;
+  #ifndef WIN32
+  		struct sigaction sigact;
+  #endif
+	int msg_len;
 
-    mosquitto_lib_init();
+	mosquitto_lib_init();
 
-    memset(&cfg, 0, sizeof(struct mosq_config));
-    rc = client_config_load_bridge(&cfg, CLIENT_PUB, argc, argv);
-    if(rc){
-        client_config_cleanup(&cfg);
-        if(rc == 2){
-            /* --help */
-            print_usage();
-        }else{
-            fprintf(stderr, "\nUse 'mosquitto_bridge --help' to see usage.\n");
-        }
-        goto cleanup;
-    }
+	rc = client_config_load_bridge(&cfg, CLIENT_PUB, argc, argv);
+	if(rc){
+		if(rc == 2){
+			/* --help */
+			print_usage();
+		}else{
+			fprintf(stderr, "\nUse 'mosquitto_bridge(2) --help' to see usage.\n");
+		}
+		goto cleanup;
+	}
 
-    signal(SIGINT, handle_sigint);
+  if(cfg.know_bridge_connection){
+    if(bridge_shared_init()) goto cleanup;
+  }
+	if(cfg.bridgeType == BRIDGE_NEW){
+			topic = strdup("$SYS/broker/bridge/new");
+			name = cfg.bridge.name;
+			pattern = cfg.bridge.topics[0].topic;
+			qos = cfg.bridge.topics[0].qos;
+			if(cfg.bridge.topics[0].direction == bd_out){
+					direction = strdup("out");
+			}else if(cfg.bridge.topics[0].direction == bd_in){
+					direction = strdup("in");
+			}else if(cfg.bridge.topics[0].direction == bd_both){
+					direction = strdup("both");
+			}
+			local_prefix = cfg.bridge.topics[0].local_prefix;
+			remote_prefix = cfg.bridge.topics[0].remote_prefix;
+			remote_add  = cfg.bridge.addresses[0].address;
+			remote_port = cfg.bridge.addresses[0].port;
+			msg_len = snprintf(NULL,0,"connection %s\naddress %s:%d\ntopic %s %s %d %s %s",name
+																																	,remote_add
+																																	,remote_port
+																																	,pattern
+																																	,direction
+																																	,qos
+																																	,local_prefix
+																																	,remote_prefix);
+			msg_len++;
+			msg = (char*) malloc(msg_len);
+			snprintf(msg,msg_len,"connection %s\naddress %s:%d\ntopic %s %s %d %s %s",name
+																																			,remote_add
+																																			,remote_port
+																																			,pattern
+																																			,direction
+																																			,qos
+																																			,local_prefix
+																																			,remote_prefix);
+      cfg.topic = strdup(topic);
+			cfg.message = strdup(msg);
+			cfg.msglen = msg_len;
+			printf("Message New Bridge : %s\n", cfg.message);
+	}else if(cfg.bridgeType == BRIDGE_DEL){
+			topic = strdup("$SYS/broker/bridge/del");
+			name = cfg.bridge.name;
+			msg_len = snprintf(NULL,0,"connection %s",name);
+      msg_len++;
+			msg = (char*) malloc(msg_len);
+			snprintf(msg,msg_len,"connection %s",name);
+      cfg.topic = strdup(topic);
+      cfg.message = strdup(msg);
+			cfg.msglen = msg_len;
+			printf("Message Del Bridge : %s\n", cfg.message);
+	}
 
-    username = cfg.username;
-  	password = cfg.password;
+	if(client_id_generate(&cfg)){
+		goto cleanup;
+	}
 
-    if(cfg.bridgeType == BRIDGE_NEW){
-        topic = strdup("$SYS/broker/bridge/new");
-        name = cfg.bridge.name;
-        pattern = cfg.bridge.topics[0].topic;
-        qos = cfg.bridge.topics[0].qos;
-        if(cfg.bridge.topics[0].direction == bd_out){
-            direction = strdup("out");
-        }else if(cfg.bridge.topics[0].direction == bd_in){
-            direction = strdup("in");
-        }else if(cfg.bridge.topics[0].direction == bd_both){
-            direction = strdup("both");
-        }
-        local_prefix = cfg.bridge.topics[0].local_prefix;
-        remote_prefix = cfg.bridge.topics[0].remote_prefix;
-        remote_add  = cfg.bridge.addresses[0].address;
-        remote_port = cfg.bridge.addresses[0].port;
+	mosq = mosquitto_new(cfg.id, cfg.clean_session, ptrMosq);
+	if(!mosq){
+		switch(errno){
+			case ENOMEM:
+				err_printf(&cfg, "Error: Out of memory.\n");
+				break;
+			case EINVAL:
+				err_printf(&cfg, "Error: Invalid id.\n");
+				break;
+		}
+		goto cleanup;
+	}
 
-        msg_len = snprintf(NULL,0,"connection %s\naddress %s:%d\ntopic %s %s %d %s %s",name
-                                                                    ,remote_add
-                                                                    ,remote_port
-                                                                    ,pattern
-                                                                    ,direction
-                                                                    ,qos
-                                                                    ,local_prefix
-                                                                    ,remote_prefix);
-        msg_len++;
-        msg = (char*) malloc(msg_len);
-        snprintf(msg,msg_len,"connection %s\naddress %s:%d\ntopic %s %s %d %s %s",name
-                                                                        ,remote_add
-                                                                        ,remote_port
-                                                                        ,pattern
-                                                                        ,direction
-                                                                        ,qos
-                                                                        ,local_prefix
-                                                                        ,remote_prefix);
-    }else if(cfg.bridgeType == BRIDGE_DEL){
-        topic = strdup("$SYS/broker/bridge/del");
-        name = cfg.bridge.name;
+	mosquitto_disconnect_v5_callback_set(mosq, my_disconnect_callback);
+  if(!cfg.know_bridge_connection){
+    mosquitto_connect_v5_callback_set(mosq, my_connect_callback_pub);
+    mosquitto_publish_v5_callback_set(mosq, my_publish_callback);
+  }
 
-        msg_len = snprintf(NULL,0,"connection %s",name);
-        msg_len++;
-        msg = (char*) malloc(msg_len);
-        snprintf(msg,msg_len,"connection %s",name);
-    }
+	if(client_opts_set(mosq, &cfg)){
+		goto cleanup;
+	}
 
-    if(client_id_generate(&cfg)){
-        goto cleanup;
-    }
+	rc = client_connect(mosq, &cfg);
+	if(rc){
+		goto cleanup;
+	}
 
-    if(cfg.know_bridge_connection){
-      if(bridge_shared_init()) goto cleanup;
-    }
+  #ifndef WIN32
+  	sigact.sa_handler = my_signal_handler;
+  	sigemptyset(&sigact.sa_mask);
+  	sigact.sa_flags = 0;
 
-    mosq = mosquitto_new(cfg.id, true, ptrMosq);
-    if(!mosq){
-        switch(errno){
-            case ENOMEM:
-                fprintf(stderr, "Error: Out of memory.\n");
-                break;
-            case EINVAL:
-                fprintf(stderr, "Error: Invalid id.\n");
-                break;
-        }
-        goto cleanup;
-    }
-
-    if(client_opts_set(mosq, &cfg)){
+  	if(sigaction(SIGALRM, &sigact, NULL) == -1){
+  		perror("sigaction");
   		goto cleanup;
   	}
 
-    mosquitto_disconnect_callback_set(mosq, my_disconnect_callback);
-    mosquitto_publish_callback_set(mosq, my_publish_callback);
+  	if(sigaction(SIGTERM, &sigact, NULL) == -1){
+  		perror("sigaction");
+  		goto cleanup;
+  	}
 
-    rc = client_connect(mosq, &cfg);
-    if(rc) return rc;
+  	if(sigaction(SIGINT, &sigact, NULL) == -1){
+  		perror("sigaction");
+  		goto cleanup;
+  	}
 
-    if(cfg.know_bridge_connection){
-      mosquitto_subscribe(mosq,NULL,"$SYS/broker/connection/#",0);
-      mosquitto_message_callback_set(mosq, on_message);
-    }
+  	if(cfg.timeout){
+  		alarm(cfg.timeout);
+  	}
+  #endif
+
+  if(cfg.know_bridge_connection){
+    mosquitto_subscribe_callback_set(mosq,  my_subscribe_callback);
+  	mosquitto_connect_v5_callback_set(mosq, my_connect_callback_sub);
+  	mosquitto_message_v5_callback_set(mosq, my_message_callback);
 
     mosquitto_loop_start(mosq);
-
-    if(cfg.know_bridge_connection){
-      while (run) {
-        pause();
-      }
-    }else{
-      wait = true;
-      printf("msg :\n%s\n",msg);
-      rc2 = mosquitto_publish(mosq, NULL, topic,strlen(msg),msg, 0, false);
-      if(rc2){
-        fprintf(stderr, "Error: Publish returned %d, disconnecting.\n", rc2);
-        mosquitto_disconnect(mosq);
-      }
-      while(wait);
+    while (process_run) {
+      pause();
     }
-
     mosquitto_disconnect(mosq);
-
     mosquitto_loop_stop(mosq,false);
+  } else {
+	  rc = pub_loop(mosq);
+  }
 
-    mosquitto_destroy(mosq);
-    mosquitto_lib_cleanup();
-    client_config_cleanup(&cfg);
+	mosquitto_destroy(mosq);
+	mosquitto_lib_cleanup();
+	//client_config_cleanup(&cfg);
+  if(cfg.know_bridge_connection){
+	  bridge_shared_cleanup();
+  }
+
+	if(rc){
+		err_printf(&cfg, "Error: %s\n", mosquitto_strerror(rc));
+	}
+	return rc;
+
+cleanup:
+	mosquitto_lib_cleanup();
+	//client_config_cleanup(&cfg);
+  if(cfg.know_bridge_connection){
     bridge_shared_cleanup();
+  }
 
-    if(rc){
-        fprintf(stderr, "Error: %s\n", mosquitto_strerror(rc));
-    }
-    return rc;
-
-    cleanup:
-    	mosquitto_lib_cleanup();
-    	client_config_cleanup(&cfg);
-    	bridge_shared_cleanup();
-    	return 1;
+	return 1;
 }

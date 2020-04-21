@@ -29,7 +29,7 @@ static_sub : sub_client.o sub_client_output.o client_props.o client_shared.o ../
 static_rr : rr_client.o client_props.o client_shared.o pub_shared.o sub_client_output.o ../lib/libmosquitto.a
 	${CROSS_COMPILE}${CC} $^ -o mosquitto_rr ${CLIENT_LDFLAGS} ${STATIC_LIB_DEPS} ${CLIENT_STATIC_LDADD}
 
-static_bridge : bridge_client.o client_props.o client_shared.o ../lib/libmosquitto.a
+static_bridge : bridge_client.o pub_shared.o client_props.o client_shared.o ../lib/libmosquitto.a
 	${CROSS_COMPILE}${CC} $^ -o mosquitto_bridge ${CLIENT_LDFLAGS} ${STATIC_LIB_DEPS} ${CLIENT_STATIC_LDADD}
 
 mosquitto_pub : pub_client.o pub_shared.o client_shared.o client_props.o
@@ -41,7 +41,7 @@ mosquitto_sub : sub_client.o sub_client_output.o client_shared.o client_props.o
 mosquitto_rr : rr_client.o client_shared.o client_props.o pub_shared.o sub_client_output.o
 	${CROSS_COMPILE}${CC} $(CLIENT_LDFLAGS) $^ -o $@ $(CLIENT_LDADD)
 
-mosquitto_bridge : bridge_client.o client_shared.o client_props.o
+mosquitto_bridge : bridge_client.o pub_shared.o client_shared.o client_props.o
 	${CROSS_COMPILE}${CC} ${CLIENT_LDFLAGS} $^ -o $@ $(CLIENT_LDADD)
 
 pub_client.o : pub_client.c ${SHARED_DEP}
