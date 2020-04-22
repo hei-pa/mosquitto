@@ -42,20 +42,28 @@ And to publish a message:
 
     mosquitto_pub -t 'test/topic' -m 'hello world'
 
-To dynamically create a bridge, use (beta):
+## To dynamically create/delete/show a bridge, use:
 
+Create Bridge:
     mosquitto_bridge -p 1883 -c testBridge -a 127.0.0.1 -R 1884 -n -t \# -q 0 -l local/ -r remote/ -D both
+    mosquitto_bridge -p 1883 -c testBridge -a 127.0.0.1 -R 1884 -n -t \# -q 0 -l test/1883/ -r test/1884/ -D both
 
-or via publish message to create a bridge:
+    or via publish message to create a bridge:
 
     mosquitto_pub -h 127.0.0.1 -p 1883 -t '$SYS/broker/bridge/new' -m 'connection tu
     address 127.0.0.1:1884
     topic # both 0 test/1883/ test/1884/
     '
 
-or via publish message to delete a bridge:
+Delete Bridge:
 
     mosquitto_pub -h 127.0.0.1 -p 1883 -t '$SYS/broker/bridge/del' -m 'connection tu'
+    or
+    mosquitto_bridge -p 1883 -c testBridge -d
+
+Show all Bridges:
+
+    mosquitto_bridge -p 1883 -k
 
 ## Documentation
 
