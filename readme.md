@@ -44,7 +44,10 @@ And to publish a message:
 
 ## To dynamically create/delete/show a bridge, use:
 
+Set allow_sys_update with true value in mosquitto.conf file.
+
 Create Bridge:
+
     mosquitto_bridge -p 1883 -c testBridge -a 127.0.0.1 -R 1884 -n -t \# -q 0 -l local/ -r remote/ -D both
     mosquitto_bridge -p 1883 -c testBridge -a 127.0.0.1 -R 1884 -n -t \# -q 0 -l test/1883/ -r test/1884/ -D both
 

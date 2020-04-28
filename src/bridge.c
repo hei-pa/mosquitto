@@ -338,12 +338,6 @@ int bridge__connect(struct mosquitto_db *db, struct mosquitto *context)
 	char *notification_topic;
 	int notification_topic_len;
 	uint8_t notification_payload;
-#ifdef WITH_EPOLL
-		struct epoll_event ev, events[MAX_EVENTS];
-		struct mosquitto *ctxt_tmp;
-		mosq_sock_t *listensock = NULL;
-		int listensock_count = 0;
-#endif
 
 	if(!context || !context->bridge) return MOSQ_ERR_INVAL;
 
@@ -446,59 +440,21 @@ int bridge__connect(struct mosquitto_db *db, struct mosquitto *context)
 
 	HASH_ADD(hh_sock, db->contexts_by_sock, sock, sizeof(context->sock), context);
 
-	if(rc == MOSQ_ERR_CONN_PENDING){
-		context->state = mosq_cs_connect_pending;
-	}
 	rc2 = send__connect(context, context->keepalive, context->clean_start, NULL);
 	if(rc2 == MOSQ_ERR_SUCCESS){
-#ifdef WITH_EPOLL
-/*
-db->epollfd = 0;
-if ((db->epollfd = epoll_create(MAX_EVENTS)) == -1) {
-	log__printf(NULL, MOSQ_LOG_ERR, "Error in epoll creating: %s", strerror(errno));
-	return MOSQ_ERR_UNKNOWN;
-}
-*/
-/*
-memset(&ev, 0, sizeof(struct epoll_event));
-memset(&events, 0, sizeof(struct epoll_event)*MAX_EVENTS);
-for(i=0; i<listensock_count; i++){
-	ev.data.fd = listensock[i];
-	ev.events = EPOLLIN;
-	if (epoll_ctl(db->epollfd, EPOLL_CTL_ADD, listensock[i], &ev) == -1) {
-		log__printf(NULL, MOSQ_LOG_ERR, "Error in epoll initial registering: %s", strerror(errno));
-		(void)close(db->epollfd);
-		db->epollfd = 0;
-		return MOSQ_ERR_UNKNOWN;
-	}
-}
-
-  HASH_ITER(hh_sock, db->contexts_by_sock, context, ctxt_tmp){
-*/
-		if(context->bridge){
-			ev.data.fd = context->sock;
-			ev.events = EPOLLIN;
-			context->events = EPOLLIN;
-			if (epoll_ctl(db->epollfd, EPOLL_CTL_ADD, context->sock, &ev) == -1) {
-				log__printf(NULL, MOSQ_LOG_ERR, "Error in epoll initial registering bridge (Bridge): %s", strerror(errno));
-				(void)close(db->epollfd);
-				db->epollfd = 0;
-				return MOSQ_ERR_UNKNOWN;
-			}
-		}
-#endif
-		return MOSQ_ERR_SUCCESS;
-}else if(rc2 == MOSQ_ERR_ERRNO && errno == ENOTCONN){
+		bridge__backoff_reset(context);
+		return rc;
+	}else if(rc2 == MOSQ_ERR_ERRNO && errno == ENOTCONN){
 		bridge__backoff_reset(context);
 		return MOSQ_ERR_SUCCESS;
-}else{
+	}else{
 		if(rc2 == MOSQ_ERR_TLS){
 			return rc2; /* Error already printed */
 		}else if(rc2 == MOSQ_ERR_ERRNO){
 			log__printf(NULL, MOSQ_LOG_ERR, "Error creating bridge: %s.", strerror(errno));
 		}else if(rc2 == MOSQ_ERR_EAI){
 			log__printf(NULL, MOSQ_LOG_ERR, "Error creating bridge: %s.", gai_strerror(errno));
-    }
+		}
 		net__socket_close(db, context);
 		return rc2;
 	}

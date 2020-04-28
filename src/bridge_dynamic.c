@@ -59,11 +59,16 @@ int bridge__dynamic_analyse(struct mosquitto_db *db, char *topic, void* payload,
 			mosquitto__free(index);
 			return MOSQ_ERR_BRIDGE_DYNA;
 		}
-		if(bridge__new(db, &(config.bridges[config.bridge_count-1]))){
+		bridge__new(db, &(config.bridges[config.bridge_count-1]));
+		if(rc != 0){
 			log__printf(NULL, MOSQ_LOG_WARNING, "Warning: Unable to connect to bridge %s.",
 					config.bridges[config.bridge_count-1].name);
 			mosquitto__free(index);
 			return MOSQ_ERR_BRIDGE_DYNA;
+		}else{
+			db->bridges[db->bridge_count-1]->bridge->restart_t = 1;
+			log__printf(NULL, MOSQ_LOG_WARNING, "Information : Restart connection with bridge %s.",
+					config.bridges[config.bridge_count-1].name);
 		}
 	}else if(strncmp("$SYS/broker/bridge/del", topic,22)==0){
 		rc = bridge__dynamic_parse_payload_del(payload,db,index);
@@ -187,11 +192,14 @@ int bridge__dynamic_parse_payload_new(struct mosquitto_db *db, void* payload, st
 						cur_bridge->notifications_local_only = false;
 						cur_bridge->start_type = bst_automatic;
 						cur_bridge->idle_timeout = 60;
-						cur_bridge->restart_timeout = 30;
+						cur_bridge->restart_timeout = 0;
+						cur_bridge->backoff_base = 5;
+						cur_bridge->backoff_cap = 30;
 						cur_bridge->threshold = 10;
 						cur_bridge->try_private = true;
 						cur_bridge->attempt_unsubscribe = true;
-						cur_bridge->protocol_version = mosq_p_mqtt31;
+						cur_bridge->protocol_version = mosq_p_mqtt311;
+						cur_bridge->primary_retry_sock = INVALID_SOCKET;
 					}else{
 						log__printf(NULL, MOSQ_LOG_ERR, "Error: Empty connection value in configuration.");
 						return MOSQ_ERR_INVAL;
