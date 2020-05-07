@@ -39,6 +39,7 @@ extern struct mosquitto_db int_db;
 
 static int config__check(struct mosquitto__config *config);
 
+// mux_epoll__add_in temporaly function in wait (develop branch of Roger Light)
 int mux_epoll__add_in(struct mosquitto_db *db, struct mosquitto *context)
 {
 	struct epoll_event ev;

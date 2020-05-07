@@ -52,6 +52,20 @@ Contributors:
 static void bridge__backoff_step(struct mosquitto *context);
 static void bridge__backoff_reset(struct mosquitto *context);
 
+// mux_epoll__delete temporaly function in wait (develop branch of Roger Light)
+int mux_epoll__delete(struct mosquitto_db *db, struct mosquitto *context)
+{
+	struct epoll_event ev;
+
+	memset(&ev, 0, sizeof(struct epoll_event));
+	if(context->sock != INVALID_SOCKET){
+		if (epoll_ctl(db->epollfd, EPOLL_CTL_DEL, context->sock, &ev) == -1) {
+				return 1;
+		}
+	}
+	return MOSQ_ERR_SUCCESS;
+}
+
 int bridge__new(struct mosquitto_db *db, struct mosquitto__bridge *bridge)
 {
 	struct mosquitto *new_context = NULL;
@@ -129,6 +143,7 @@ int bridge__del(struct mosquitto_db *db, int index)
 	assert(db);
 
 	bridge__disconnect(db,db->bridges[index]);
+	mux_epoll__delete(db,db->bridges[index]);
 
 	db->bridge_count--;
 
