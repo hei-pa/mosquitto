@@ -14,6 +14,10 @@ Contributor:
 #include <stdio.h>
 #include <string.h>
 
+#ifdef WITH_EPOLL
+#include <sys/epoll.h>
+#endif
+
 #ifndef WIN32
 #include <unistd.h>
 #include <strings.h>
@@ -34,6 +38,19 @@ Contributor:
 extern struct mosquitto_db int_db;
 
 static int config__check(struct mosquitto__config *config);
+
+int mux_epoll__add_in(struct mosquitto_db *db, struct mosquitto *context)
+{
+	struct epoll_event ev;
+
+	memset(&ev, 0, sizeof(struct epoll_event));
+	ev.events = EPOLLIN;
+	ev.data.fd = context->sock;
+	if (epoll_ctl(db->epollfd, EPOLL_CTL_ADD, context->sock, &ev) == -1) {
+		log__printf(NULL, MOSQ_LOG_ERR, "Error in epoll accepting: %s", strerror(errno));
+	}
+	return MOSQ_ERR_SUCCESS;
+}
 
 int bridge__dynamic_analyse(struct mosquitto_db *db, char *topic, void* payload, uint32_t payloadlen)
 {
@@ -66,9 +83,9 @@ int bridge__dynamic_analyse(struct mosquitto_db *db, char *topic, void* payload,
 			mosquitto__free(index);
 			return MOSQ_ERR_BRIDGE_DYNA;
 		}else{
-			db->bridges[db->bridge_count-1]->bridge->restart_t = 1;
-			log__printf(NULL, MOSQ_LOG_WARNING, "Information : Restart connection with bridge %s.",
+			log__printf(NULL, MOSQ_LOG_WARNING, "Information : Start connection with bridge %s.",
 					config.bridges[config.bridge_count-1].name);
+			mux_epoll__add_in(db, db->bridges[db->bridge_count-1]);
 		}
 	}else if(strncmp("$SYS/broker/bridge/del", topic,22)==0){
 		rc = bridge__dynamic_parse_payload_del(payload,db,index);
