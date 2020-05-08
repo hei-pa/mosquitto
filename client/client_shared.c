@@ -1511,6 +1511,8 @@ int client_config_line_proc_bridge(struct mosq_config *cfg, int argc, char *argv
         cfg->bridge.name = strdup(argv[i+1]);
       }
       i++;
+		}else if(!strcmp(argv[i], "-j") || !strcmp(argv[i], "--json")){
+			cfg->bridge_conf_json = CONF_JSON;
     }else if(!strcmp(argv[i], "-n") || !strcmp(argv[i], "--new")){
       if(cfg->bridgeType == -1){
         cfg->bridgeType = BRIDGE_NEW;
@@ -1613,6 +1615,7 @@ int client_config_load_bridge(struct mosq_config *cfg, int pub_or_sub, int argc,
   init_config(cfg, pub_or_sub);
 
   /* Deal with real argc/argv */
+	cfg->bridge_conf_json = 0;
 	cfg->bridgeType = -1;
 	cfg->know_bridge_connection = 0;
 	cfg->bridge.addresses = malloc(sizeof(struct bridge_address));
