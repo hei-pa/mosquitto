@@ -65,7 +65,7 @@ WITH_SYSTEMD:=no
 WITH_SRV:=no
 
 # Build with websockets support on the broker.
-WITH_WEBSOCKETS:=no
+WITH_WEBSOCKETS:=yes
 
 # Use elliptic keys in broker
 WITH_EC:=yes
@@ -101,6 +101,9 @@ WITH_BUNDLED_DEPS:=yes
 
 # Build with coverage options
 WITH_COVERAGE:=no
+
+# Build mosquitto_sub / mosquitto_bridge / broker with bridge dynamic with cJSON support
+WITH_CJSON:=yes
 
 # =============================================================================
 # End of user configuration
@@ -321,6 +324,13 @@ ifeq ($(WITH_COVERAGE),yes)
 	LIB_LDFLAGS:=$(LIB_LDFLAGS) -coverage
 	CLIENT_CFLAGS:=$(CLIENT_CFLAGS) -coverage
 	CLIENT_LDFLAGS:=$(CLIENT_LDFLAGS) -coverage
+endif
+
+ifeq ($(WITH_CJSON),yes)
+	BROKER_CFLAGS:=$(BROKER_CFLAGS) -DWITH_CJSON -I/usr/local/include/cjson
+	BROKER_LDADD:=$(BROKER_LDADD) -lcjson -L/usr/local/lib
+	CLIENT_CFLAGS:=$(CLIENT_CFLAGS) -DWITH_CJSON -I/usr/local/include/cjson
+	CLIENT_LDADD:=$(CLIENT_LDADD) -lcjson -L/usr/local/lib
 endif
 
 BROKER_LDADD:=${BROKER_LDADD} ${LDADD}

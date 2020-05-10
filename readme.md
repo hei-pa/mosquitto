@@ -51,16 +51,22 @@ Create Bridge:
     mosquitto_bridge -p 1883 -c testBridge -a 127.0.0.1 -R 1884 -n -t \# -q 0 -l local/ -r remote/ -D both
     mosquitto_bridge -p 1883 -c testBridge -a 127.0.0.1 -R 1884 -n -t \# -q 0 -l test/1883/ -r test/1884/ -D both
 
+    with json format:
+    mosquitto_bridge -p 1883 -c testBridge -a 127.0.0.1 -R 1884 -n -j -t \# -q 0 -l test/1883/ -r test/1884/ -D both
+
     or via publish message to create a bridge:
 
-    mosquitto_pub -h 127.0.0.1 -p 1883 -t '$SYS/broker/bridge/new' -m 'connection tu
+    mosquitto_pub -h 127.0.0.1 -p 1883 -t '$SYS/broker/bridge/new' -m 'connection testBridge
     address 127.0.0.1:1884
     topic # both 0 test/1883/ test/1884/
     '
 
+    with json format:
+    mosquitto_pub -h 127.0.0.1 -p 1883 -t '$SYS/broker/bridge/new' -m '{"connection":"testBridge","address":"127.0.0.1","port":1884,"topic":"#","direction":"both","qos":0,"local_prefix":"test/1883/","remote_prefix":"test/1884/"}'
+    
 Delete Bridge:
 
-    mosquitto_pub -h 127.0.0.1 -p 1883 -t '$SYS/broker/bridge/del' -m 'connection tu'
+    mosquitto_pub -h 127.0.0.1 -p 1883 -t '$SYS/broker/bridge/del' -m 'connection testBridge'
     or
     mosquitto_bridge -p 1883 -c testBridge -d
 
@@ -97,6 +103,7 @@ already be built. Use `make binary` to skip building the man pages, or install
 * openssl (libssl-dev on Debian based systems) - disable with `make WITH_TLS=no`
 * xsltproc (xsltproc and docbook-xsl on Debian based systems) - only needed when building from git sources - disable with `make WITH_DOCS=no`
 * uthash / utlist - bundled versions of these headers are provided, disable their use with `make WITH_BUNDLED_DEPS=no`
+* cJSON - for client JSON output support. Disable with `make WITH_CJSON=no` Auto detected with CMake.
 
 Equivalent options for enabling/disabling features are available when using the CMake build.
 
