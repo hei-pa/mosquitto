@@ -684,6 +684,7 @@ int bridge__dynamic_analyse(struct mosquitto_db *db, char *topic, void* payload,
 int bridge__dynamic_parse_payload_new(struct mosquitto_db *db, void* payload, struct mosquitto__config *config);
 int bridge__dynamic_parse_payload_new_json(struct mosquitto_db *db, void* payload, struct mosquitto__config *config);
 int bridge__dynamic_parse_payload_del(void* payload, struct mosquitto_db *db, int *index);
+int bridge__dynamic_parse_payload_del_json(void* payload, struct mosquitto_db *db, int *index);
 #endif
 
 /* ============================================================

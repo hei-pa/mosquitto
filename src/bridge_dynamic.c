@@ -93,7 +93,7 @@ int bridge__dynamic_analyse(struct mosquitto_db *db, char *topic, void* payload,
 			mux_epoll__add_in(db, db->bridges[db->bridge_count-1]);
 		}
 	}else if(strncmp("$SYS/broker/bridge/del", topic,22)==0){
-		rc = bridge__dynamic_parse_payload_del(payload,db,index);
+		rc = bridge__dynamic_parse_payload_del_json(payload,db,index);
 		if(rc != 0){
 			log__printf(NULL, MOSQ_LOG_ERR, "Error: Unable to parse PUBLISH for bridge dynamic.");
 			mosquitto__free(index);
@@ -120,15 +120,13 @@ int bridge__dynamic_analyse(struct mosquitto_db *db, char *topic, void* payload,
 
 int bridge__dynamic_parse_payload_new_json(struct mosquitto_db *db, void* payload, struct mosquitto__config *config)
 {
-	int rc;
 	int i;
 	int len;
 	struct mosquitto__bridge *cur_bridge = NULL;
 	struct mosquitto__bridge_topic *cur_topic;
 
 #ifndef WITH_CJSON
-  rc = bridge__dynamic_parse_payload_new(db, payload, config);
-	return rc;
+  return bridge__dynamic_parse_payload_new(db, payload, config);
 #endif
 
 	cJSON *message_json = cJSON_Parse(payload);
@@ -137,8 +135,8 @@ int bridge__dynamic_parse_payload_new_json(struct mosquitto_db *db, void* payloa
 		if(error_ptr != NULL){
 			log__printf(NULL, MOSQ_LOG_WARNING, "Warning: Unable to parse JSON Message for bridge dynamic. Maybe normal message configuration. %s", error_ptr);
 		}
-		rc = bridge__dynamic_parse_payload_new(db, payload, config);
-		goto end;
+		cJSON_Delete(message_json);
+		return bridge__dynamic_parse_payload_new(db, payload, config);
 	}
 
   const cJSON *bridges_json = NULL;
@@ -149,15 +147,15 @@ int bridge__dynamic_parse_payload_new_json(struct mosquitto_db *db, void* payloa
   bridges_json = cJSON_GetObjectItemCaseSensitive(message_json, "bridges");
 	if(!cJSON_IsArray(bridges_json)) {
 		log__printf(NULL, MOSQ_LOG_ERR, "Error: Invalid bridge configuration.");
-		rc = MOSQ_ERR_INVAL;
-		goto end;
+		cJSON_Delete(message_json);
+		return MOSQ_ERR_INVAL;
 	}
   bridges_count_json = cJSON_GetArraySize(bridges_json);
-	log__printf(NULL, MOSQ_LOG_ERR, "Information : %d bridge(s) dynamic.", bridges_count_json);
+	log__printf(NULL, MOSQ_LOG_DEBUG, "Information : %d bridge(s) dynamic.", bridges_count_json);
 	if(bridges_count_json == 0){
 		log__printf(NULL, MOSQ_LOG_ERR, "Error: None Bridge in configuration.");
-		rc = MOSQ_ERR_INVAL;
-		goto end;
+		cJSON_Delete(message_json);
+		return MOSQ_ERR_INVAL;
 	}
   const cJSON *bridge_json = NULL;
 	// Actually, just one bridge defined in configuration bridges. Work in progress...
@@ -177,24 +175,24 @@ int bridge__dynamic_parse_payload_new_json(struct mosquitto_db *db, void* payloa
 		for(i=0; i<db->bridge_count; i++){
 			if(!strcmp(db->bridges[i]->bridge->name, connection_json->valuestring)){
 				log__printf(NULL, MOSQ_LOG_ERR, "Error: Duplicate bridge name \"%s\".", connection_json->valuestring);
-				rc = MOSQ_ERR_INVAL;
-				goto end;
+				cJSON_Delete(message_json);
+				return MOSQ_ERR_INVAL;
 			}
 		}
 		config->bridge_count++;
 		config->bridges = mosquitto__realloc(config->bridges, config->bridge_count*sizeof(struct mosquitto__bridge));
 		if(!config->bridges){
 			log__printf(NULL, MOSQ_LOG_ERR, "Error: Out of memory.");
-			rc = MOSQ_ERR_NOMEM;
-			goto end;
+			cJSON_Delete(message_json);
+			return MOSQ_ERR_NOMEM;
 		}
 		cur_bridge = &(config->bridges[config->bridge_count-1]);
 		memset(cur_bridge, 0, sizeof(struct mosquitto__bridge));
 		cur_bridge->name = mosquitto__strdup(connection_json->valuestring);
 		if(!cur_bridge->name){
 			log__printf(NULL, MOSQ_LOG_ERR, "Error: Out of memory.");
-			rc = MOSQ_ERR_NOMEM;
-			goto end;
+			cJSON_Delete(message_json);
+			return MOSQ_ERR_NOMEM;
 		}
 		cur_bridge->keepalive = 60;
 		cur_bridge->notifications = true;
@@ -214,14 +212,14 @@ int bridge__dynamic_parse_payload_new_json(struct mosquitto_db *db, void* payloa
 	addresses_json = cJSON_GetObjectItemCaseSensitive(bridge_json, "addresses");
 	if(!cJSON_IsArray(addresses_json)) {
 		log__printf(NULL, MOSQ_LOG_ERR, "Error: Invalid bridge configuration (addresses).");
-		rc = MOSQ_ERR_INVAL;
-		goto end;
+		cJSON_Delete(message_json);
+		return MOSQ_ERR_INVAL;
 	}
 	addresses_count_json = cJSON_GetArraySize(addresses_json);
 	if(addresses_count_json == 0){
 		log__printf(NULL, MOSQ_LOG_ERR, "Error: None address in bridge configuration.");
-		rc = MOSQ_ERR_INVAL;
-		goto end;
+		cJSON_Delete(message_json);
+		return MOSQ_ERR_INVAL;
 	}
 	const cJSON *addressItem_json = NULL;
 	cJSON_ArrayForEach(addressItem_json, addresses_json) {
@@ -231,15 +229,15 @@ int bridge__dynamic_parse_payload_new_json(struct mosquitto_db *db, void* payloa
 	  if(cJSON_IsString(address_json) && (address_json->valuestring != NULL)) {
 	  	if(!cur_bridge || cur_bridge->addresses){
 		  	log__printf(NULL, MOSQ_LOG_ERR, "Error: Invalid bridge configuration.");
-		  	rc = MOSQ_ERR_INVAL;
-		  	goto end;
+		  	cJSON_Delete(message_json);
+				return MOSQ_ERR_INVAL;
 		  }
 		  cur_bridge->address_count++;
 		  cur_bridge->addresses = mosquitto__realloc(cur_bridge->addresses, sizeof(struct bridge_address)*cur_bridge->address_count);
 		  if(!cur_bridge->addresses){
 		  	log__printf(NULL, MOSQ_LOG_ERR, "Error: Out of memory.");
-		  	rc = MOSQ_ERR_NOMEM;
-		  	goto end;
+		  	cJSON_Delete(message_json);
+				return MOSQ_ERR_NOMEM;
 		  }
 		  cur_bridge->addresses[cur_bridge->address_count-1].address = mosquitto__strdup(address_json->valuestring);
   	}
@@ -247,8 +245,8 @@ int bridge__dynamic_parse_payload_new_json(struct mosquitto_db *db, void* payloa
 	  if(cJSON_IsNumber(port_json)){
 		  if(port_json->valueint < 1 || port_json->valueint > 65535){
 		  	log__printf(NULL, MOSQ_LOG_ERR, "Error: Invalid port value (%d).", port_json->valueint);
-		  	rc = MOSQ_ERR_INVAL;
-	  		goto end;
+		  	cJSON_Delete(message_json);
+				return MOSQ_ERR_INVAL;
 	  	}
 	  	cur_bridge->addresses[cur_bridge->address_count-1].port = port_json->valueint;
 	  }
@@ -261,8 +259,8 @@ int bridge__dynamic_parse_payload_new_json(struct mosquitto_db *db, void* payloa
 				sizeof(struct mosquitto__bridge_topic)*cur_bridge->topic_count);
 		if(!cur_bridge->topics){
 			log__printf(NULL, MOSQ_LOG_ERR, "Error: Out of memory.");
-			rc = MOSQ_ERR_NOMEM;
-			goto end;
+			cJSON_Delete(message_json);
+			return MOSQ_ERR_NOMEM;
 		}
 		cur_topic = &cur_bridge->topics[cur_bridge->topic_count-1];
 		if(!strcmp(topic_json->valuestring, "\"\"")){
@@ -271,8 +269,8 @@ int bridge__dynamic_parse_payload_new_json(struct mosquitto_db *db, void* payloa
 			cur_topic->topic = mosquitto__strdup(topic_json->valuestring);
 			if(!cur_topic->topic){
 				log__printf(NULL, MOSQ_LOG_ERR, "Error: Out of memory.");
-				rc = MOSQ_ERR_NOMEM;
-				goto end;
+				cJSON_Delete(message_json);
+				return MOSQ_ERR_NOMEM;
 			}
 		}
 		cur_topic->direction = bd_out;
@@ -281,8 +279,8 @@ int bridge__dynamic_parse_payload_new_json(struct mosquitto_db *db, void* payloa
 		cur_topic->remote_prefix = NULL;
 	}else{
 		log__printf(NULL, MOSQ_LOG_ERR, "Error: Empty topic value in configuration.");
-		rc = MOSQ_ERR_INVAL;
-		goto end;
+		cJSON_Delete(message_json);
+		return MOSQ_ERR_INVAL;
 	}
 	direction_json = cJSON_GetObjectItemCaseSensitive(bridge_json, "direction");
 	if(cJSON_IsString(direction_json) && (direction_json->valuestring != NULL)) {
@@ -294,16 +292,16 @@ int bridge__dynamic_parse_payload_new_json(struct mosquitto_db *db, void* payloa
 			cur_topic->direction = bd_both;
 		}else{
 			log__printf(NULL, MOSQ_LOG_ERR, "Error: Invalid bridge topic direction '%s'.", direction_json->valuestring);
-			rc = MOSQ_ERR_INVAL;
-			goto end;
+			cJSON_Delete(message_json);
+			return MOSQ_ERR_INVAL;
 		}
 	}
 	qos_json = cJSON_GetObjectItemCaseSensitive(bridge_json, "qos");
 	if(cJSON_IsNumber(qos_json)){
 		if(qos_json->valueint < 0 || qos_json->valueint > 2){
 			log__printf(NULL, MOSQ_LOG_ERR, "Error: Invalid bridge QoS level '%d'.", qos_json->valueint);
-			rc = MOSQ_ERR_INVAL;
-			goto end;
+			cJSON_Delete(message_json);
+			return MOSQ_ERR_INVAL;
 		}
 		cur_topic->qos = qos_json->valueint;
 	}
@@ -315,14 +313,14 @@ int bridge__dynamic_parse_payload_new_json(struct mosquitto_db *db, void* payloa
 		}else{
 			if(mosquitto_pub_topic_check(local_prefix_json->valuestring) != MOSQ_ERR_SUCCESS){
 				log__printf(NULL, MOSQ_LOG_ERR, "Error: Invalid bridge topic local prefix '%s'.", local_prefix_json->valuestring);
-				rc = MOSQ_ERR_INVAL;
-				goto end;
+				cJSON_Delete(message_json);
+				return MOSQ_ERR_INVAL;
 			}
 			cur_topic->local_prefix = mosquitto__strdup(local_prefix_json->valuestring);
 			if(!cur_topic->local_prefix){
 				log__printf(NULL, MOSQ_LOG_ERR, "Error: Out of memory.");
-				rc = MOSQ_ERR_NOMEM;
-				goto end;
+				cJSON_Delete(message_json);
+				return MOSQ_ERR_NOMEM;
 			}
 		}
 	}
@@ -333,14 +331,14 @@ int bridge__dynamic_parse_payload_new_json(struct mosquitto_db *db, void* payloa
 		}else{
 			if(mosquitto_pub_topic_check(remote_prefix_json->valuestring) != MOSQ_ERR_SUCCESS){
 				log__printf(NULL, MOSQ_LOG_ERR, "Error: Invalid bridge topic remote prefix '%s'.", remote_prefix_json->valuestring);
-				rc = MOSQ_ERR_INVAL;
-				goto end;
+				cJSON_Delete(message_json);
+				return MOSQ_ERR_INVAL;
 			}
 			cur_topic->remote_prefix = mosquitto__strdup(remote_prefix_json->valuestring);
 			if(!cur_topic->remote_prefix){
 				log__printf(NULL, MOSQ_LOG_ERR, "Error: Out of memory.");
-				rc = MOSQ_ERR_NOMEM;
-				goto end;
+				cJSON_Delete(message_json);
+				return MOSQ_ERR_NOMEM;
 			}
 		}
 	}
@@ -348,19 +346,19 @@ int bridge__dynamic_parse_payload_new_json(struct mosquitto_db *db, void* payloa
   //Last verification
 	if(cur_bridge->address_count == 0){
 		log__printf(NULL, MOSQ_LOG_ERR, "Error: Empty address value in configuration.");
-		rc = MOSQ_ERR_INVAL;
-		goto end;
+		cJSON_Delete(message_json);
+		return MOSQ_ERR_INVAL;
 	}
 	if(config->bridge_count == 0){
 		log__printf(NULL, MOSQ_LOG_ERR, "Error: Empty connection value in configuration.");
-		rc = MOSQ_ERR_INVAL;
-		goto end;
+		cJSON_Delete(message_json);
+		return MOSQ_ERR_INVAL;
 	}
 	if(cur_topic->topic == NULL &&
 			(cur_topic->local_prefix == NULL || cur_topic->remote_prefix == NULL)){
 		log__printf(NULL, MOSQ_LOG_ERR, "Error: Invalid bridge remapping.");
-		rc = MOSQ_ERR_INVAL;
-		goto end;
+		cJSON_Delete(message_json);
+		return MOSQ_ERR_INVAL;
 	}
 
 	if(cur_topic->local_prefix){
@@ -369,8 +367,8 @@ int bridge__dynamic_parse_payload_new_json(struct mosquitto_db *db, void* payloa
 			cur_topic->local_topic = mosquitto__malloc(len+1);
 			if(!cur_topic->local_topic){
 				log__printf(NULL, MOSQ_LOG_ERR, "Error: Out of memory.");
-				rc = MOSQ_ERR_NOMEM;
-				goto end;
+				cJSON_Delete(message_json);
+				return MOSQ_ERR_NOMEM;
 			}
 			snprintf(cur_topic->local_topic, len+1, "%s%s", cur_topic->local_prefix, cur_topic->topic);
 			cur_topic->local_topic[len] = '\0';
@@ -378,16 +376,16 @@ int bridge__dynamic_parse_payload_new_json(struct mosquitto_db *db, void* payloa
 			cur_topic->local_topic = mosquitto__strdup(cur_topic->local_prefix);
 			if(!cur_topic->local_topic){
 				log__printf(NULL, MOSQ_LOG_ERR, "Error: Out of memory.");
-				rc = MOSQ_ERR_NOMEM;
-				goto end;
+				cJSON_Delete(message_json);
+				return MOSQ_ERR_NOMEM;
 			}
 		}
 	}else{
 		cur_topic->local_topic = mosquitto__strdup(cur_topic->topic);
 		if(!cur_topic->local_topic){
 			log__printf(NULL, MOSQ_LOG_ERR, "Error: Out of memory.");
-			rc = MOSQ_ERR_NOMEM;
-			goto end;
+			cJSON_Delete(message_json);
+			return MOSQ_ERR_NOMEM;
 		}
 	}
 
@@ -397,8 +395,8 @@ int bridge__dynamic_parse_payload_new_json(struct mosquitto_db *db, void* payloa
 			cur_topic->remote_topic = mosquitto__malloc(len+1);
 			if(!cur_topic->remote_topic){
 				log__printf(NULL, MOSQ_LOG_ERR, "Error: Out of memory.");
-				rc = MOSQ_ERR_NOMEM;
-				goto end;
+				cJSON_Delete(message_json);
+				return MOSQ_ERR_NOMEM;
 			}
 			snprintf(cur_topic->remote_topic, len, "%s%s", cur_topic->remote_prefix, cur_topic->topic);
 			cur_topic->remote_topic[len] = '\0';
@@ -406,24 +404,20 @@ int bridge__dynamic_parse_payload_new_json(struct mosquitto_db *db, void* payloa
 			cur_topic->remote_topic = mosquitto__strdup(cur_topic->remote_prefix);
 			if(!cur_topic->remote_topic){
 				log__printf(NULL, MOSQ_LOG_ERR, "Error: Out of memory.");
-				rc = MOSQ_ERR_NOMEM;
-				goto end;
+				cJSON_Delete(message_json);
+				return MOSQ_ERR_NOMEM;
 			}
 		}
 	}else{
 		cur_topic->remote_topic = mosquitto__strdup(cur_topic->topic);
 		if(!cur_topic->remote_topic){
 			log__printf(NULL, MOSQ_LOG_ERR, "Error: Out of memory.");
-			rc = MOSQ_ERR_NOMEM;
-			goto end;
+			cJSON_Delete(message_json);
+			return MOSQ_ERR_NOMEM;
 		}
 	}
-
-  rc = MOSQ_ERR_SUCCESS;
-
-end:
   cJSON_Delete(message_json);
-	return rc;
+  return MOSQ_ERR_SUCCESS;
 }
 
 int bridge__dynamic_parse_payload_new(struct mosquitto_db *db, void* payload, struct mosquitto__config *config)
@@ -693,6 +687,41 @@ int bridge__dynamic_parse_payload_new(struct mosquitto_db *db, void* payload, st
 	}
 }
 
+int bridge__dynamic_parse_payload_del_json(void* payload, struct mosquitto_db *db, int *index)
+{
+	int i;
+
+#ifndef WITH_CJSON
+  return bridge__dynamic_parse_payload_del(payload,db,index);
+#endif
+
+	cJSON *message_json = cJSON_Parse(payload);
+	if(message_json == NULL){
+		const char *error_ptr = cJSON_GetErrorPtr();
+		if(error_ptr != NULL){
+			log__printf(NULL, MOSQ_LOG_WARNING, "Warning: Unable to parse JSON Message for bridge dynamic. Maybe normal message configuration. %s", error_ptr);
+		}
+		cJSON_Delete(message_json);
+		return bridge__dynamic_parse_payload_del(payload,db,index);
+	}
+
+	const cJSON *connection_json = NULL;
+	connection_json = cJSON_GetObjectItemCaseSensitive(message_json, "connection");
+	if(cJSON_IsString(connection_json) && (connection_json->valuestring != NULL)) {
+			/* Check for existing bridge name. */
+			for(i=0; i<db->bridge_count; i++){
+				if(!strcmp(db->bridges[i]->bridge->name, connection_json->valuestring)){
+					*index = i;
+				}
+			}
+		}else{
+			log__printf(NULL, MOSQ_LOG_ERR, "Error: Empty connection value in configuration.");
+			return MOSQ_ERR_INVAL;
+		}
+
+		return MOSQ_ERR_SUCCESS;
+}
+
 int bridge__dynamic_parse_payload_del(void* payload, struct mosquitto_db *db, int *index)
 {
 	char *buf;
@@ -728,7 +757,7 @@ int bridge__dynamic_parse_payload_del(void* payload, struct mosquitto_db *db, in
 		}
 	}
 
-	return 0;
+	return MOSQ_ERR_SUCCESS;
 }
 
 static int config__check(struct mosquitto__config *config)

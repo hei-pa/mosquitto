@@ -405,14 +405,23 @@ int main(int argc, char *argv[])
 	}else if(cfg.bridgeType == BRIDGE_DEL){
 			topic = strdup("$SYS/broker/bridge/del");
 			name = cfg.bridge.name;
-			msg_len = snprintf(NULL,0,"connection %s",name);
-      msg_len++;
-			msg = (char*) malloc(msg_len);
-			snprintf(msg,msg_len,"connection %s",name);
+      if(cfg.bridge_conf_json == CONF_JSON){
+        msg_json_len = snprintf(NULL,0,"{\"connection\":\"%s\"}", name);
+        msg_json_len++;
+        msg_json = (char*) malloc(msg_json_len);
+        snprintf(msg_json,msg_json_len,"{\"connection\":\"%s\"}", name);
+        cfg.message = strdup(msg_json);
+        cfg.msglen = msg_json_len;
+      }else{
+        msg_len = snprintf(NULL,0,"connection %s",name);
+        msg_len++;
+        msg = (char*) malloc(msg_len);
+        snprintf(msg,msg_len,"connection %s",name);
+        cfg.message = strdup(msg);
+        cfg.msglen = msg_len;
+      }
       cfg.topic = strdup(topic);
-      cfg.message = strdup(msg);
-			cfg.msglen = msg_len;
-			printf("Message Del Bridge : %s\n", cfg.message);
+			printf("Message Del Bridge (%ld):\n%s\n", cfg.msglen, cfg.message);
 	}
 
 	if(client_id_generate(&cfg)){

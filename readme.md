@@ -66,9 +66,17 @@ Create Bridge:
 
 Delete Bridge:
 
-    mosquitto_pub -h 127.0.0.1 -p 1883 -t '$SYS/broker/bridge/del' -m 'connection testBridge'
-    or
     mosquitto_bridge -p 1883 -c testBridge -d
+
+    with json format:
+    mosquitto_bridge -p 1883 -c testBridge -d -j
+
+    or via publish message to delete a bridge:
+
+    mosquitto_pub -h 127.0.0.1 -p 1883 -t '$SYS/broker/bridge/del' -m 'connection testBridge'
+
+    with json format:
+    mosquitto_pub -h 127.0.0.1 -p 1883 -t '$SYS/broker/bridge/del' -m '{"connection":"testBridge"}'
 
 Show all Bridges:
 
