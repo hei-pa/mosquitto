@@ -142,7 +142,10 @@ int bridge__dynamic_parse_payload_new_json(struct mosquitto_db *db, void* payloa
 	}
 
   const cJSON *bridges_json = NULL;
+	const cJSON *addresses_json = NULL;
 	int bridges_count_json = 0;
+	int addresses_count_json = 0;
+
   bridges_json = cJSON_GetObjectItemCaseSensitive(message_json, "bridges");
 	if(!cJSON_IsArray(bridges_json)) {
 		log__printf(NULL, MOSQ_LOG_ERR, "Error: Invalid bridge configuration.");
@@ -162,8 +165,6 @@ int bridge__dynamic_parse_payload_new_json(struct mosquitto_db *db, void* payloa
 	bridge_json = cJSON_GetArrayItem(bridges_json, index);
 
 	const cJSON *connection_json = NULL;
-	const cJSON *address_json = NULL;
-	const cJSON *port_json = NULL;
 	const cJSON *topic_json = NULL;
 	const cJSON *direction_json = NULL;
 	const cJSON *qos_json= NULL;
@@ -210,34 +211,49 @@ int bridge__dynamic_parse_payload_new_json(struct mosquitto_db *db, void* payloa
 		cur_bridge->primary_retry_sock = INVALID_SOCKET;
 	}
 
-	address_json = cJSON_GetObjectItemCaseSensitive(bridge_json, "address");
-	if(cJSON_IsString(address_json) && (address_json->valuestring != NULL)) {
-		if(!cur_bridge || cur_bridge->addresses){
-			log__printf(NULL, MOSQ_LOG_ERR, "Error: Invalid bridge configuration.");
-			rc = MOSQ_ERR_INVAL;
-			goto end;
-		}
-		//TODOFC: Multiple adresses, actually just one
-		cur_bridge->address_count++;
-		cur_bridge->addresses = mosquitto__realloc(cur_bridge->addresses, sizeof(struct bridge_address)*cur_bridge->address_count);
-		if(!cur_bridge->addresses){
-			log__printf(NULL, MOSQ_LOG_ERR, "Error: Out of memory.");
-			rc = MOSQ_ERR_NOMEM;
-			goto end;
-		}
-		cur_bridge->addresses[cur_bridge->address_count-1].address = mosquitto__strdup(address_json->valuestring);
-		cur_bridge->addresses[cur_bridge->address_count-1].port = 1883; // Default Value
+	addresses_json = cJSON_GetObjectItemCaseSensitive(bridge_json, "addresses");
+	if(!cJSON_IsArray(addresses_json)) {
+		log__printf(NULL, MOSQ_LOG_ERR, "Error: Invalid bridge configuration (addresses).");
+		rc = MOSQ_ERR_INVAL;
+		goto end;
 	}
+	addresses_count_json = cJSON_GetArraySize(addresses_json);
+	if(addresses_count_json == 0){
+		log__printf(NULL, MOSQ_LOG_ERR, "Error: None address in bridge configuration.");
+		rc = MOSQ_ERR_INVAL;
+		goto end;
+	}
+	const cJSON *addressItem_json = NULL;
+	cJSON_ArrayForEach(addressItem_json, addresses_json) {
+	  cJSON *address_json = cJSON_GetObjectItemCaseSensitive(addressItem_json, "address");
+	  cJSON *port_json = cJSON_GetObjectItemCaseSensitive(addressItem_json, "port");
 
-	port_json = cJSON_GetObjectItemCaseSensitive(bridge_json, "port");
-	if(cJSON_IsNumber(port_json)){
-		if(port_json->valueint < 1 || port_json->valueint > 65535){
-			log__printf(NULL, MOSQ_LOG_ERR, "Error: Invalid port value (%d).", port_json->valueint);
-			rc = MOSQ_ERR_INVAL;
-			goto end;
-		}
-		cur_bridge->addresses[cur_bridge->address_count-1].port = port_json->valueint;
-	}
+	  if(cJSON_IsString(address_json) && (address_json->valuestring != NULL)) {
+	  	if(!cur_bridge || cur_bridge->addresses){
+		  	log__printf(NULL, MOSQ_LOG_ERR, "Error: Invalid bridge configuration.");
+		  	rc = MOSQ_ERR_INVAL;
+		  	goto end;
+		  }
+		  cur_bridge->address_count++;
+		  cur_bridge->addresses = mosquitto__realloc(cur_bridge->addresses, sizeof(struct bridge_address)*cur_bridge->address_count);
+		  if(!cur_bridge->addresses){
+		  	log__printf(NULL, MOSQ_LOG_ERR, "Error: Out of memory.");
+		  	rc = MOSQ_ERR_NOMEM;
+		  	goto end;
+		  }
+		  cur_bridge->addresses[cur_bridge->address_count-1].address = mosquitto__strdup(address_json->valuestring);
+  	}
+
+	  if(cJSON_IsNumber(port_json)){
+		  if(port_json->valueint < 1 || port_json->valueint > 65535){
+		  	log__printf(NULL, MOSQ_LOG_ERR, "Error: Invalid port value (%d).", port_json->valueint);
+		  	rc = MOSQ_ERR_INVAL;
+	  		goto end;
+	  	}
+	  	cur_bridge->addresses[cur_bridge->address_count-1].port = port_json->valueint;
+	  }
+  }
+
 	topic_json = cJSON_GetObjectItemCaseSensitive(bridge_json, "topic");
 	if(cJSON_IsString(topic_json) && (topic_json->valuestring != NULL)) {
 		cur_bridge->topic_count++;

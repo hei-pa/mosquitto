@@ -62,7 +62,7 @@ Create Bridge:
     '
 
     with json format:
-    mosquitto_pub -h 127.0.0.1 -p 1883 -t '$SYS/broker/bridge/new' -m '{"bridges":[{"connection":"testBridge","address":"127.0.0.1","port":1884,"topic":"#","direction":"both","qos":0,"local_prefix":"test/1883/","remote_prefix":"test/1884/"}]}'
+    mosquitto_pub -h 127.0.0.1 -p 1883 -t '$SYS/broker/bridge/new' -m '{"bridges":[{"connection":"testBridge","addresses":[{"address":"127.0.0.1","port":1884}],"topic":"#","direction":"both","qos":0,"local_prefix":"test/1883/","remote_prefix":"test/1884/"}]}'
 
 Delete Bridge:
 

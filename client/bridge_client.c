@@ -370,11 +370,11 @@ int main(int argc, char *argv[])
 			remote_add  = cfg.bridge.addresses[0].address;
 			remote_port = cfg.bridge.addresses[0].port;
       if(cfg.bridge_conf_json == CONF_JSON){
-        msg_json_len = snprintf(NULL,0,"{\"bridges\":[{\"connection\":\"%s\",\"address\":\"%s\",\"port\":%d,\"topic\":\"%s\",\"direction\":\"%s\",\"qos\":%d,\"local_prefix\":\"%s\",\"remote_prefix\":\"%s\"}]}",name
+        msg_json_len = snprintf(NULL,0,"{\"bridges\":[{\"connection\":\"%s\",\"addresses\":[{\"address\":\"%s\",\"port\":%d}],\"topic\":\"%s\",\"direction\":\"%s\",\"qos\":%d,\"local_prefix\":\"%s\",\"remote_prefix\":\"%s\"}]}",name
                                                         ,remote_add,remote_port,pattern,direction,qos,local_prefix,remote_prefix);
         msg_json_len++;
         msg_json = (char*) malloc(msg_json_len);
-        snprintf(msg_json,msg_json_len,"{\"bridges\":[{\"connection\":\"%s\",\"address\":\"%s\",\"port\":%d,\"topic\":\"%s\",\"direction\":\"%s\",\"qos\":%d,\"local_prefix\":\"%s\",\"remote_prefix\":\"%s\"}]}",name
+        snprintf(msg_json,msg_json_len,"{\"bridges\":[{\"connection\":\"%s\",\"addresses\":[{\"address\":\"%s\",\"port\":%d}],\"topic\":\"%s\",\"direction\":\"%s\",\"qos\":%d,\"local_prefix\":\"%s\",\"remote_prefix\":\"%s\"}]}",name
                                                         ,remote_add,remote_port,pattern,direction,qos,local_prefix,remote_prefix);
         cfg.message = strdup(msg_json);
         cfg.msglen = msg_json_len;
