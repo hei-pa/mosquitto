@@ -141,6 +141,26 @@ int bridge__dynamic_parse_payload_new_json(struct mosquitto_db *db, void* payloa
 		goto end;
 	}
 
+  const cJSON *bridges_json = NULL;
+	int bridges_count_json = 0;
+  bridges_json = cJSON_GetObjectItemCaseSensitive(message_json, "bridges");
+	if(!cJSON_IsArray(bridges_json)) {
+		log__printf(NULL, MOSQ_LOG_ERR, "Error: Invalid bridge configuration.");
+		rc = MOSQ_ERR_INVAL;
+		goto end;
+	}
+  bridges_count_json = cJSON_GetArraySize(bridges_json);
+	log__printf(NULL, MOSQ_LOG_ERR, "Information : %d bridge(s) dynamic.", bridges_count_json);
+	if(bridges_count_json == 0){
+		log__printf(NULL, MOSQ_LOG_ERR, "Error: None Bridge in configuration.");
+		rc = MOSQ_ERR_INVAL;
+		goto end;
+	}
+  const cJSON *bridge_json = NULL;
+	// Actually, just one bridge defined in configuration bridges. Work in progress...
+	int index = 0;
+	bridge_json = cJSON_GetArrayItem(bridges_json, index);
+
 	const cJSON *connection_json = NULL;
 	const cJSON *address_json = NULL;
 	const cJSON *port_json = NULL;
@@ -150,7 +170,7 @@ int bridge__dynamic_parse_payload_new_json(struct mosquitto_db *db, void* payloa
 	const cJSON *local_prefix_json = NULL;
 	const cJSON *remote_prefix_json = NULL;
 
-	connection_json = cJSON_GetObjectItemCaseSensitive(message_json, "connection");
+	connection_json = cJSON_GetObjectItemCaseSensitive(bridge_json, "connection");
 	if(cJSON_IsString(connection_json) && (connection_json->valuestring != NULL)) {
 		/* Check for existing bridge name. */
 		for(i=0; i<db->bridge_count; i++){
@@ -190,7 +210,7 @@ int bridge__dynamic_parse_payload_new_json(struct mosquitto_db *db, void* payloa
 		cur_bridge->primary_retry_sock = INVALID_SOCKET;
 	}
 
-	address_json = cJSON_GetObjectItemCaseSensitive(message_json, "address");
+	address_json = cJSON_GetObjectItemCaseSensitive(bridge_json, "address");
 	if(cJSON_IsString(address_json) && (address_json->valuestring != NULL)) {
 		if(!cur_bridge || cur_bridge->addresses){
 			log__printf(NULL, MOSQ_LOG_ERR, "Error: Invalid bridge configuration.");
@@ -209,7 +229,7 @@ int bridge__dynamic_parse_payload_new_json(struct mosquitto_db *db, void* payloa
 		cur_bridge->addresses[cur_bridge->address_count-1].port = 1883; // Default Value
 	}
 
-	port_json = cJSON_GetObjectItemCaseSensitive(message_json, "port");
+	port_json = cJSON_GetObjectItemCaseSensitive(bridge_json, "port");
 	if(cJSON_IsNumber(port_json)){
 		if(port_json->valueint < 1 || port_json->valueint > 65535){
 			log__printf(NULL, MOSQ_LOG_ERR, "Error: Invalid port value (%d).", port_json->valueint);
@@ -218,7 +238,7 @@ int bridge__dynamic_parse_payload_new_json(struct mosquitto_db *db, void* payloa
 		}
 		cur_bridge->addresses[cur_bridge->address_count-1].port = port_json->valueint;
 	}
-	topic_json = cJSON_GetObjectItemCaseSensitive(message_json, "topic");
+	topic_json = cJSON_GetObjectItemCaseSensitive(bridge_json, "topic");
 	if(cJSON_IsString(topic_json) && (topic_json->valuestring != NULL)) {
 		cur_bridge->topic_count++;
 		cur_bridge->topics = mosquitto__realloc(cur_bridge->topics,
@@ -248,7 +268,7 @@ int bridge__dynamic_parse_payload_new_json(struct mosquitto_db *db, void* payloa
 		rc = MOSQ_ERR_INVAL;
 		goto end;
 	}
-	direction_json = cJSON_GetObjectItemCaseSensitive(message_json, "direction");
+	direction_json = cJSON_GetObjectItemCaseSensitive(bridge_json, "direction");
 	if(cJSON_IsString(direction_json) && (direction_json->valuestring != NULL)) {
 		if(!strcasecmp(direction_json->valuestring, "out")){
 			cur_topic->direction = bd_out;
@@ -262,7 +282,7 @@ int bridge__dynamic_parse_payload_new_json(struct mosquitto_db *db, void* payloa
 			goto end;
 		}
 	}
-	qos_json = cJSON_GetObjectItemCaseSensitive(message_json, "qos");
+	qos_json = cJSON_GetObjectItemCaseSensitive(bridge_json, "qos");
 	if(cJSON_IsNumber(qos_json)){
 		if(qos_json->valueint < 0 || qos_json->valueint > 2){
 			log__printf(NULL, MOSQ_LOG_ERR, "Error: Invalid bridge QoS level '%d'.", qos_json->valueint);
@@ -271,7 +291,7 @@ int bridge__dynamic_parse_payload_new_json(struct mosquitto_db *db, void* payloa
 		}
 		cur_topic->qos = qos_json->valueint;
 	}
-	local_prefix_json = cJSON_GetObjectItemCaseSensitive(message_json, "local_prefix");
+	local_prefix_json = cJSON_GetObjectItemCaseSensitive(bridge_json, "local_prefix");
 	if(cJSON_IsString(local_prefix_json) && (local_prefix_json->valuestring != NULL)) {
 		cur_bridge->topic_remapping = true;
 		if(!strcmp(local_prefix_json->valuestring, "\"\"")){
@@ -290,7 +310,7 @@ int bridge__dynamic_parse_payload_new_json(struct mosquitto_db *db, void* payloa
 			}
 		}
 	}
-	remote_prefix_json = cJSON_GetObjectItemCaseSensitive(message_json, "remote_prefix");
+	remote_prefix_json = cJSON_GetObjectItemCaseSensitive(bridge_json, "remote_prefix");
 	if(cJSON_IsString(remote_prefix_json) && (remote_prefix_json->valuestring != NULL)) {
 		if(!strcmp(remote_prefix_json->valuestring, "\"\"")){
 			cur_topic->remote_prefix = NULL;
