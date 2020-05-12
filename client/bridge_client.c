@@ -125,7 +125,7 @@ int show_bridges_json(struct bridge_list* bridges){
       cJSON_AddItemToObject(bridge_json, "connection", connection_json);
       free(bridge_name);
     }
-    string_json = cJSON_Print(show_bridges_json);
+    string_json = cJSON_PrintUnformatted(show_bridges_json);
     if(string_json == NULL){
       printf("Error, Failed to print show_bridges.\n");
     }
