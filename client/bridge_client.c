@@ -17,7 +17,7 @@ Tifaifai Maupiti - initial implementation and documentation.
 #include "config.h"
 
 #ifdef WITH_CJSON
-#  include <cJSON.h>
+#  include <cjson/cJSON.h>
 #endif
 
 #include <errno.h>

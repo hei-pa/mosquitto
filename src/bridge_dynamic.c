@@ -19,7 +19,7 @@ Contributor:
 #endif
 
 #ifdef WITH_CJSON
-#  include <cJSON.h>
+#  include <cjson/cJSON.h>
 #endif
 
 #ifndef WIN32
