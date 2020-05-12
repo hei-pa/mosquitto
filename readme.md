@@ -82,6 +82,9 @@ Show all Bridges:
 
     mosquitto_bridge -p 1883 -k
 
+    with json format:
+    mosquitto_bridge -p 1883 -k -j
+
 ## Documentation
 
 Documentation for the broker, clients and client library API can be found in

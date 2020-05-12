@@ -16,6 +16,10 @@ Tifaifai Maupiti - initial implementation and documentation.
 
 #include "config.h"
 
+#ifdef WITH_CJSON
+#  include <cJSON.h>
+#endif
+
 #include <errno.h>
 #include <fcntl.h>
 #include <stdio.h>
@@ -73,7 +77,69 @@ struct bridge_list{
 
 struct bridge_list *bridges = NULL;
 
-void show_bridges(struct bridge_list* bridges)
+int show_bridges_json(struct bridge_list* bridges){
+  int rc;
+
+  #ifndef WITH_CJSON
+    rc = show_bridges(bridges);
+    return rc;
+  #endif
+
+  int i;
+  char * bridge_name;
+  int bridge_name_len;
+  char *string_json = NULL;
+  cJSON *bridges_json = NULL;
+  cJSON *bridge_json = NULL;
+  cJSON *connection_json = NULL;
+
+  if(cfg.bridge_conf_json == CONF_JSON){
+    cJSON *show_bridges_json = cJSON_CreateObject();
+    if(show_bridges_json == NULL) {
+      cJSON_Delete(show_bridges_json);
+      return MOSQ_ERR_INVAL;
+    }
+    bridges_json = cJSON_CreateArray();
+    if(bridges_json == NULL) {
+      cJSON_Delete(show_bridges_json);
+      return MOSQ_ERR_INVAL;
+    }
+    cJSON_AddItemToObject(show_bridges_json, "bridges", bridges_json);
+    for(i=0;i<bridges->bridge_list_count;i++)
+    {
+      bridge_json = cJSON_CreateObject();
+      if(bridge_json == NULL){
+        cJSON_Delete(show_bridges_json);
+        return MOSQ_ERR_INVAL;
+      }
+      cJSON_AddItemToArray(bridges_json, bridge_json);
+      bridge_name_len = strlen(bridges->bridge[i].name) - strlen("/state") - strlen("$SYS/broker/connection/");
+      bridge_name = malloc(bridge_name_len*sizeof(char));
+      memset(bridge_name, 0, bridge_name_len);
+      memcpy(bridge_name, bridges->bridge[i].name + strlen("$SYS/broker/connection/")*sizeof(char) , bridge_name_len);
+      connection_json = cJSON_CreateString(bridge_name);
+      if(connection_json == NULL){
+        cJSON_Delete(show_bridges_json);
+        return MOSQ_ERR_INVAL;
+      }
+      cJSON_AddItemToObject(bridge_json, "connection", connection_json);
+      free(bridge_name);
+    }
+    string_json = cJSON_Print(show_bridges_json);
+    if(string_json == NULL){
+      printf("Error, Failed to print show_bridges.\n");
+    }
+    printf("%s\n",string_json);
+    cJSON_Delete(show_bridges_json);
+    return MOSQ_ERR_SUCCESS;
+  }else{
+    rc = show_bridges(bridges);
+    return rc;
+  }
+  return MOSQ_ERR_SUCCESS;
+}
+
+int show_bridges(struct bridge_list* bridges)
 {
   int i;
   char * bridge_name;
@@ -98,12 +164,13 @@ void show_bridges(struct bridge_list* bridges)
     free(bridge_name);
     nb_line++;
   }
+  return MOSQ_ERR_SUCCESS;
 }
 
 void my_message_callback(struct mosquitto *mosq, void *obj, const struct mosquitto_message *message, const mosquitto_property *properties)
 {
   UNUSED(properties);
-
+  int rc;
   struct bridge_list *bridges;
   bridges = (struct bridge_list*) obj;
   int valid_erase = 0;
@@ -122,7 +189,7 @@ void my_message_callback(struct mosquitto *mosq, void *obj, const struct mosquit
         exit(-1);
       }
       bridges->bridge[bridges->bridge_list_count-1].name = strdup(message->topic);
-      show_bridges(bridges);
+      rc = show_bridges_json(bridges);
     }else{
       if(bridges->bridge_list_count>0){
         for (i = 0; i < bridges->bridge_list_count; i++) {
@@ -141,7 +208,7 @@ void my_message_callback(struct mosquitto *mosq, void *obj, const struct mosquit
             printf("Error: Out of memory. 3\n");
             exit(-1);
           }
-          show_bridges(bridges);
+          rc = show_bridges_json(bridges);
         }
       }else{
         bridges->bridge_list_count = 0;
